@@ -5,6 +5,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: SeineAI/SeineSailor@master
+    - uses: SeineAI/SeineSailor@main
       with:
         llm_light_model: Test from action
