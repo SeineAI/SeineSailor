@@ -1,44 +1,73 @@
+import os
 import re
+import json
 import base64
 import asyncio
 from typing import List, Tuple
 from github import Github
+from github.Repository import Repository
 from options import Options
 from prompts import Prompts
 from commenter import Commenter, COMMENT_REPLY_TAG, RAW_SUMMARY_END_TAG, RAW_SUMMARY_START_TAG, SHORT_SUMMARY_END_TAG, \
     SHORT_SUMMARY_START_TAG, SUMMARIZE_TAG
 from inputs import Inputs
-from octokit import octokit
 from tokenizer import get_token_count
 from bot import Bot
 from logger import setup_logger
 
 logger = setup_logger("review")
 
-context = Github().context
-repo = context.repo
+
+# Load GitHub Actions context
+def load_github_context():
+    event_path = os.getenv("GITHUB_EVENT_PATH")
+    repo_name = os.getenv("GITHUB_REPOSITORY")
+
+    if not event_path or not repo_name:
+        raise ValueError("GITHUB_EVENT_PATH or GITHUB_REPOSITORY is missing.")
+
+    with open(event_path, 'r') as file:
+        event_data = json.load(file)
+
+    owner, repo = repo_name.split('/')
+    return event_data, owner, repo
+
+
+# Initialize GitHub client and context
+token = os.environ.get("GITHUB_TOKEN")
+if not token:
+    raise ValueError("GITHUB_TOKEN environment variable is missing.")
+
+github_client = Github(token)
+event_data, owner, repo_name = load_github_context()
+repo: Repository = github_client.get_repo(f"{owner}/{repo_name}")
+
+# Extract Pull Request information from the event data
+if "pull_request" in event_data:
+    pr_data = event_data["pull_request"]
+else:
+    raise ValueError("No pull_request data found in the event payload.")
 
 ignore_keyword = "@SeineSailor: ignore"
 
 
 async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts: Prompts):
     commenter = Commenter()
-
     llm_concurrency_limit = asyncio.Semaphore(options.llm_concurrency_limit)
     github_concurrency_limit = asyncio.Semaphore(options.github_concurrency_limit)
 
-    if context.event_name not in ["pull_request", "pull_request_target"]:
-        logger.warning(f"Skipped: current event is {context.event_name}, only support pull_request event")
+    if event_data["event_name"] not in ["pull_request", "pull_request_target"]:
+        logger.warning(f"Skipped: current event is {event_data['event_name']}, only support pull_request event")
         return
 
-    if context.payload.pull_request is None:
-        logger.warning("Skipped: context.payload.pull_request is null")
+    if "pull_request" not in event_data:
+        logger.warning("Skipped: event data does not contain pull_request")
         return
 
     inputs = Inputs()
-    inputs.title = context.payload.pull_request.title
-    if context.payload.pull_request.body:
-        inputs.description = commenter.get_description(context.payload.pull_request.body)
+    inputs.title = pr_data.get("title", "")
+    if pr_data.get("body"):
+        inputs.description = commenter.get_description(pr_data["body"])
 
     if ignore_keyword in inputs.description:
         logger.info("Skipped: description contains ignore_keyword")
@@ -46,7 +75,7 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
 
     inputs.system_message = options.system_message
 
-    existing_summarize_cmt = await commenter.find_comment_with_tag(SUMMARIZE_TAG, context.payload.pull_request.number)
+    existing_summarize_cmt = await commenter.find_comment_with_tag(SUMMARIZE_TAG, pr_data["number"])
     existing_commit_ids_block = ""
     existing_summarize_cmt_body = ""
     if existing_summarize_cmt:
@@ -63,28 +92,17 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
             commenter.get_reviewed_commit_ids(existing_commit_ids_block)
         )
 
-    if not highest_reviewed_commit_id or highest_reviewed_commit_id == context.payload.pull_request.head.sha:
-        logger.info(f"Will review from the base commit: {context.payload.pull_request.base.sha}")
-        highest_reviewed_commit_id = context.payload.pull_request.base.sha
+    if not highest_reviewed_commit_id or highest_reviewed_commit_id == pr_data["head"]["sha"]:
+        logger.info(f"Will review from the base commit: {pr_data['base']['sha']}")
+        highest_reviewed_commit_id = pr_data["base"]["sha"]
     else:
         logger.info(f"Will review from commit: {highest_reviewed_commit_id}")
 
-    incremental_diff = await octokit.repos.compare_commits(
-        owner=repo.owner.login,
-        repo=repo.name,
-        base=highest_reviewed_commit_id,
-        head=context.payload.pull_request.head.sha
-    )
+    incremental_diff = repo.compare(highest_reviewed_commit_id, pr_data["head"]["sha"])
+    target_branch_diff = repo.compare(pr_data["base"]["sha"], pr_data["head"]["sha"])
 
-    target_branch_diff = await octokit.repos.compare_commits(
-        owner=repo.owner.login,
-        repo=repo.name,
-        base=context.payload.pull_request.base.sha,
-        head=context.payload.pull_request.head.sha
-    )
-
-    incremental_files = incremental_diff.data.files
-    target_branch_files = target_branch_diff.data.files
+    incremental_files = incremental_diff.files
+    target_branch_files = target_branch_diff.files
 
     if incremental_files is None or target_branch_files is None:
         logger.warning("Skipped: files data is missing")
@@ -111,7 +129,7 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
         logger.warning("Skipped: filterSelectedFiles is null")
         return
 
-    commits = incremental_diff.data.commits
+    commits = incremental_diff.commits
 
     if not commits:
         logger.warning("Skipped: commits is null")
@@ -120,16 +138,9 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
     async def retrieve_file_contents(file: dict) -> Tuple[str, str, str, List[Tuple[int, int, str]]]:
         file_content = ""
         try:
-            contents = await octokit.repos.get_content(
-                owner=repo.owner.login,
-                repo=repo.name,
-                path=file["filename"],
-                ref=context.payload.pull_request.base.sha
-            )
-            if contents.data:
-                if not isinstance(contents.data, list):
-                    if contents.data.type == "file" and contents.data.content:
-                        file_content = base64.b64decode(contents.data.content).decode("utf-8")
+            contents = repo.get_contents(file["filename"], ref=pr_data["base"]["sha"])
+            if contents.type == "file" and contents.content:
+                file_content = base64.b64decode(contents.content).decode("utf-8")
         except Exception as e:
             logger.warning(f"Failed to get file contents: {e}. This is OK if it's a new file.")
 
@@ -163,7 +174,7 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
 
     filtered_files = await asyncio.gather(
         *[
-            retrieve_file_contents(file)
+            retrieve_file_contents({"filename": file.filename, "patch": file.patch})
             for file in filter_selected_files
         ]
     )
@@ -176,7 +187,7 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
 
     status_msg = f'''<details>
 <summary>Commits</summary>
-Files that changed from the base of the PR and between {highest_reviewed_commit_id} and {context.payload.pull_request.head.sha} commits.
+Files that changed from the base of the PR and between {highest_reviewed_commit_id} and {pr_data["head"]["sha"]} commits.
 </details>
 {"" if not files_and_changes else f"""
 <details>
@@ -189,7 +200,7 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
 <details>
 <summary>Files ignored due to filter ({len(filter_ignored_files)})</summary>
 
-* {chr(10).join([file["filename"] for file in filter_ignored_files])}
+* {chr(10).join([file.filename for file in filter_ignored_files])}
 
 </details>
 """}
@@ -286,7 +297,7 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
         else:
             message = "### Summary by SeineSailor\n\n" + release_notes_response
             try:
-                await commenter.update_description(context.payload.pull_request.number, message)
+                await commenter.update_description(pr_data["number"], message)
             except Exception as e:
                 logger.warning(f"release notes: error from github: {e}")
 
@@ -367,7 +378,7 @@ If you like this project, please support us by purchasing the [Pro version](http
 
             patches_packed = 0
             for start_line, end_line, patch in patches:
-                if context.payload.pull_request is None:
+                if pr_data is None:
                     logger.warning("No pull request found, skipping.")
                     continue
 
@@ -382,7 +393,7 @@ If you like this project, please support us by purchasing the [Pro version](http
                 comment_chain = ""
                 try:
                     all_chains = await commenter.get_comment_chains_within_range(
-                        context.payload.pull_request.number,
+                        pr_data["number"],
                         filename,
                         start_line,
                         end_line,
@@ -429,7 +440,7 @@ If you like this project, please support us by purchasing the [Pro version](http
                             lgtm_count += 1
                             continue
 
-                        if context.payload.pull_request is None:
+                        if pr_data is None:
                             logger.warning("No pull request found, skipping.")
                             continue
 
@@ -501,11 +512,11 @@ Add @SeineSailor: ignore anywhere in the PR description to pause further reviews
 
 </details>
 '''
-        summarize_comment += f"""\n{commenter.add_reviewed_commit_id(existing_commit_ids_block, context.payload.pull_request.head.sha)}"""
+        summarize_comment += f"""\n{commenter.add_reviewed_commit_id(existing_commit_ids_block, pr_data["head"]["sha"])}"""
 
         await commenter.submit_review(
-            context.payload.pull_request.number,
-            commits[-1].sha,
+            pr_data["number"],
+            commits[-1]["sha"],
             status_msg
         )
 
@@ -638,7 +649,6 @@ def parse_review(response: str, patches: List[Tuple[int, int, str]], debug=False
         comment = sanitize_code_block(comment, "diff")
         return comment
 
-
     response = sanitize_response(response.strip())
 
     lines = response.split("\n")
@@ -686,7 +696,6 @@ def parse_review(response: str, patches: List[Tuple[int, int, str]], debug=False
 
             logger.info(
                 f"Stored comment for line range {current_start_line}-{current_end_line}: {current_comment.strip()}")
-
 
     for line in lines:
         line_number_range_match = line_number_range_regex.search(line)
