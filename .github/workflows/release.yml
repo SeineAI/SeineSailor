@@ -52,7 +52,7 @@
         packages: write
       env:
         REGISTRY: ghcr.io
-        IMAGE_NAME: seine_ai/seine_sailor # different from repo name
+        IMAGE_NAME: SeineAI/seine_sailor # different from repo name
       steps:
         - name: Set up Docker Buildx
           uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb

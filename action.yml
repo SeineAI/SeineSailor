@@ -204,4 +204,4 @@ outputs:
     description: "Output from the action for testing purpose"
 runs:
   using: 'docker'
-  image: 'docker://ghcr.io/seine_ai/seine_sailor:latest' # change the latest to v1, v2... to separate dev and release
+  image: 'docker://ghcr.io/SeineAI/seine_sailor:latest' # change the latest to v1, v2... to separate dev and release
