@@ -1,10 +1,8 @@
 import re
-import json
+import base64
+import asyncio
 from typing import List, Tuple
 from github import Github
-from github.PullRequest import PullRequest
-from github.Repository import Repository
-from github.PullRequestReviewComment import PullRequestReviewComment
 from options import Options
 from prompts import Prompts
 from commenter import Commenter, COMMENT_REPLY_TAG, RAW_SUMMARY_END_TAG, RAW_SUMMARY_START_TAG, SHORT_SUMMARY_END_TAG, \
@@ -13,7 +11,6 @@ from inputs import Inputs
 from octokit import octokit
 from tokenizer import get_token_count
 from bot import Bot
-
 from logger import setup_logger
 
 logger = setup_logger("review")
@@ -139,7 +136,7 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
         file_diff = file.get("patch", "")
 
         patches = []
-        for patch in split_patch(file.patch):
+        for patch in split_patch(file_diff):
             patch_lines = patch_start_end_line(patch)
             if patch_lines is None:
                 continue
@@ -159,14 +156,14 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
 """
             patches.append((patch_lines["new_hunk"]["start_line"], patch_lines["new_hunk"]["end_line"], hunks_str))
 
-            if patches:
-                return file["filename"], file_content, file_diff, patches
-            else:
-                return None
+        if patches:
+            return file["filename"], file_content, file_diff, patches
+        else:
+            return None
 
     filtered_files = await asyncio.gather(
         *[
-            github_concurrency_limit(retrieve_file_contents(file))
+            retrieve_file_contents(file)
             for file in filter_selected_files
         ]
     )
@@ -177,7 +174,7 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
         logger.error("Skipped: no files to review")
         return
 
-    status_msg = f"""<details>
+    status_msg = f'''<details>
 <summary>Commits</summary>
 Files that changed from the base of the PR and between {highest_reviewed_commit_id} and {context.payload.pull_request.head.sha} commits.
 </details>
@@ -196,7 +193,7 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
 
 </details>
 """}
-"""
+'''
 
     in_progress_summarize_cmt = commenter.add_in_progress_status(existing_summarize_cmt_body, status_msg)
 
@@ -224,7 +221,7 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
             return None
 
         try:
-            summarize_resp, _ = await light_bot.chat(summarize_prompt, {})
+            summarize_resp = await light_bot.chat(summarize_prompt)
 
             if not summarize_resp:
                 logger.info("summarize: nothing obtained from llm")
@@ -272,18 +269,18 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
                 inputs.raw_summary += f"""---
 {filename}: {summary}
 """
-            summarize_resp, _ = await heavy_bot.chat(prompts.render_summarize_changesets(inputs), {})
+            summarize_resp = await heavy_bot.chat(prompts.render_summarize_changesets(inputs))
             if not summarize_resp:
                 logger.warning("summarize: nothing obtained from llm")
             else:
                 inputs.raw_summary = summarize_resp
 
-    summarize_final_response, _ = await heavy_bot.chat(prompts.render_summarize(inputs), {})
+    summarize_final_response = await heavy_bot.chat(prompts.render_summarize(inputs))
     if not summarize_final_response:
         logger.info("summarize: nothing obtained from llm")
 
     if not options.disable_release_notes:
-        release_notes_response, _ = await heavy_bot.chat(prompts.render_summarize_release_notes(inputs), {})
+        release_notes_response = await heavy_bot.chat(prompts.render_summarize_release_notes(inputs))
         if not release_notes_response:
             logger.info("release notes: nothing obtained from llm")
         else:
@@ -291,9 +288,9 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
             try:
                 await commenter.update_description(context.payload.pull_request.number, message)
             except Exception as e:
-                logger.warning(f"release notes: error from github: {e.message}")
+                logger.warning(f"release notes: error from github: {e}")
 
-    summarize_short_response, _ = await heavy_bot.chat(prompts.render_summarize_short(inputs), {})
+    summarize_short_response = await heavy_bot.chat(prompts.render_summarize_short(inputs))
     inputs.short_summary = summarize_short_response
 
     summarize_comment = f"""{summarize_final_response}
@@ -316,7 +313,7 @@ If you like this project, please support us by purchasing the [Pro version](http
 </details>
 """
 
-    status_msg += f"""
+    status_msg += f'''
 {"" if not skipped_files else f"""
 <details>
 <summary>Files not processed due to max files limit ({len(skipped_files)})</summary>
@@ -333,7 +330,7 @@ If you like this project, please support us by purchasing the [Pro version](http
 
 </details>
 """}
-"""
+'''
 
     if not options.disable_review:
         files_and_changes_review = [
@@ -352,6 +349,7 @@ If you like this project, please support us by purchasing the [Pro version](http
         review_count = 0
 
         async def do_review(filename: str, file_content: str, patches: List[Tuple[int, int, str]]):
+            nonlocal lgtm_count, review_count
             logger.info(f"reviewing {filename}")
             ins = inputs.clone()
             ins.filename = filename
@@ -378,8 +376,8 @@ If you like this project, please support us by purchasing the [Pro version](http
                         f"unable to pack more patches into this request, packed: {patches_packed}, total patches: {len(patches)}, skipping.")
                     if options.debug:
                         logger.info(f"prompt so far: {prompts.render_review_file_diff(ins)}")
-                        break
-                    patches_packed += 1
+                    break
+                patches_packed += 1
 
                 comment_chain = ""
                 try:
@@ -395,7 +393,7 @@ If you like this project, please support us by purchasing the [Pro version](http
                         logger.info(f"Found comment chains: {all_chains} for {filename}")
                         comment_chain = all_chains
                 except Exception as e:
-                    logger.warning(f"Failed to get comments: {e}, skipping. backtrace: {e.stack}")
+                    logger.warning(f"Failed to get comments: {e}, skipping.")
 
                 comment_chain_tokens = get_token_count(comment_chain)
                 if tokens + comment_chain_tokens > options.heavy_token_limits.request_tokens:
@@ -404,21 +402,21 @@ If you like this project, please support us by purchasing the [Pro version](http
                     tokens += comment_chain_tokens
 
                 ins.patches += f"""
-        {patch}
-        """
+{patch}
+"""
                 if comment_chain:
                     ins.patches += f"""
-        ---comment_chains---
-        '''
-        {comment_chain}
-        '''
-        """
-                    ins.patches += """
-        ---end_change_section---"""
+---comment_chains---
+'''
+{comment_chain}
+'''
+"""
+                ins.patches += """
+---end_change_section---"""
 
             if patches_packed > 0:
                 try:
-                    response, _ = await heavy_bot.chat(prompts.render_review_file_diff(ins), {})
+                    response = await heavy_bot.chat(prompts.render_review_file_diff(ins))
                     if not response:
                         logger.info("review: nothing obtained from llm")
                         reviews_failed.append(f"{filename} (no response)")
@@ -446,7 +444,7 @@ If you like this project, please support us by purchasing the [Pro version](http
                         except Exception as e:
                             reviews_failed.append(f"{filename} comment failed ({e})")
                 except Exception as e:
-                    logger.warning(f"Failed to review: {e}, skipping. backtrace: {e.stack}")
+                    logger.warning(f"Failed to review: {e}, skipping.")
                     reviews_failed.append(f"{filename} ({e})")
             else:
                 reviews_skipped.append(f"{filename} (diff too large)")
@@ -463,10 +461,10 @@ If you like this project, please support us by purchasing the [Pro version](http
         await asyncio.gather(*review_promises)
 
         status_msg += f'''
-            {"" if not reviews_failed else f"""<details>
+{"" if not reviews_failed else f"""<details>
 <summary>Files not reviewed due to errors ({len(reviews_failed)})</summary>
 
-{"\n".join(reviews_failed)}
+{chr(10).join(reviews_failed)}
 
 </details>
 """}
@@ -534,6 +532,7 @@ def split_patch(patch: str) -> List[str]:
 
     return result
 
+
 def patch_start_end_line(patch: str) -> dict:
     pattern = re.compile(r"(^@@ -(\d+),(\d+) +(\d+),(\d+) @@)", re.MULTILINE)
     match = pattern.search(patch)
@@ -546,14 +545,15 @@ def patch_start_end_line(patch: str) -> dict:
             "old_hunk": {
                 "start_line": old_begin,
                 "end_line": old_begin + old_diff - 1
-                },
+            },
             "new_hunk": {
                 "start_line": new_begin,
                 "end_line": new_begin + new_diff - 1
-                }
+            }
         }
     else:
         return {}
+
 
 def parse_patch(patch: str) -> dict:
     hunk_info = patch_start_end_line(patch)
@@ -603,6 +603,7 @@ class Review:
         self.start_line = start_line
         self.end_line = end_line
         self.comment = comment
+
 
 def parse_review(response: str, patches: List[Tuple[int, int, str]], debug=False) -> List[Review]:
     reviews = []
@@ -714,5 +715,3 @@ def parse_review(response: str, patches: List[Tuple[int, int, str]], debug=False
     store_review()
 
     return reviews
-
-
