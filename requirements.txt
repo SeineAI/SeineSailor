@@ -1,0 +1,4 @@
+python-dotenv
+ibm-cos-sdk
+ibm-watsonx-ai
+langchain

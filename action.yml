@@ -1,0 +1,207 @@
+name: 'SeineSailor'
+description: 'AI-powered copilot for project managers'
+branding:
+  icon: 'navigation'
+  color: 'blue'
+author: 'SeineAI'
+inputs:
+  llm_api_type:
+    required: false
+    description: 'The API to use (openai or watsonx)'
+    default: 'watsonx'
+  debug:
+    required: false
+    description: 'Enable debug mode'
+    default: 'false'
+  max_files:
+    required: false
+    description:
+      'Max files to summarize and review. Less than or equal to 0 means no
+      limit.'
+    default: '150'
+  review_simple_changes:
+    required: false
+    description: 'Review even when the changes are simple'
+    default: 'false'
+  review_comment_lgtm:
+    required: false
+    description: 'Leave comments even if the patch is LGTM'
+    default: 'false'
+  path_filters:
+    required: false
+    description: |
+      The path filters, e.g., "src/**.py", "!dist/**", each line will be considered as one pattern.
+      See also
+
+      - https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onpushpull_requestpull_request_targetpathspaths-ignore
+      - https://github.com/isaacs/minimatch
+    default: |
+      !dist/**
+      !**/*.app
+      !**/*.bin
+      !**/*.bz2
+      !**/*.class
+      !**/*.db
+      !**/*.csv
+      !**/*.tsv
+      !**/*.dat
+      !**/*.dll
+      !**/*.dylib
+      !**/*.egg
+      !**/*.glif
+      !**/*.gz
+      !**/*.xz
+      !**/*.zip
+      !**/*.7z
+      !**/*.rar
+      !**/*.zst
+      !**/*.ico
+      !**/*.jar
+      !**/*.tar
+      !**/*.war
+      !**/*.lo
+      !**/*.log
+      !**/*.mp3
+      !**/*.wav
+      !**/*.wma
+      !**/*.mp4
+      !**/*.avi
+      !**/*.mkv
+      !**/*.wmv
+      !**/*.m4a
+      !**/*.m4v
+      !**/*.3gp
+      !**/*.3g2
+      !**/*.rm
+      !**/*.mov
+      !**/*.flv
+      !**/*.iso
+      !**/*.swf
+      !**/*.flac
+      !**/*.nar
+      !**/*.o
+      !**/*.ogg
+      !**/*.otf
+      !**/*.p
+      !**/*.pdf
+      !**/*.doc
+      !**/*.docx
+      !**/*.xls
+      !**/*.xlsx
+      !**/*.ppt
+      !**/*.pptx
+      !**/*.pkl
+      !**/*.pickle
+      !**/*.pyc
+      !**/*.pyd
+      !**/*.pyo
+      !**/*.pub
+      !**/*.pem
+      !**/*.rkt
+      !**/*.so
+      !**/*.ss
+      !**/*.eot
+      !**/*.exe
+      !**/*.pb.go
+      !**/*.lock
+      !**/*.ttf
+      !**/*.yaml
+      !**/*.yml
+      !**/*.cfg
+      !**/*.toml
+      !**/*.ini
+      !**/*.mod
+      !**/*.sum
+      !**/*.work
+      !**/*.json
+      !**/*.mmd
+      !**/*.svg
+      !**/*.jpeg
+      !**/*.jpg
+      !**/*.png
+      !**/*.gif
+      !**/*.bmp
+      !**/*.tiff
+      !**/*.webm
+      !**/*.woff
+      !**/*.woff2
+      !**/*.dot
+      !**/*.md5sum
+      !**/*.wasm
+      !**/*.snap
+      !**/*.parquet
+      !**/gen/**
+      !**/_gen/**
+      !**/generated/**
+      !**/@generated/**
+      !**/vendor/**
+      !**/*.min.js
+      !**/*.min.js.map
+      !**/*.min.js.css
+      !**/*.tfstate
+      !**/*.tfstate.backup
+  disable_review:
+    required: false
+    description: 'Only provide the summary and skip the code review.'
+    default: 'false'
+  disable_release_notes:
+    required: false
+    description: 'Disable release notes'
+    default: 'false'
+  llm_base_url:
+    required: false
+    description: 'The url of the llm api interface.'
+    default: 'https://us-south.ml.cloud.ibm.com'
+  llm_light_model:
+    required: false
+    description:
+      'Model to use for simple tasks like summarizing diff on a file.'
+    default: 'mistralai/mixtral-8x7b-instruct-v01'
+  llm_heavy_model:
+    required: false
+    description: 'Model to use for complex tasks such as code reviews.'
+    default: 'meta-llama/llama-3-70b-instruct'
+  llm_model_temperature:
+    required: false
+    description: 'Temperature for llm model'
+    default: '0.05'
+  llm_retries:
+    required: false
+    description:
+      'How many times to retry llm API in case of timeouts or errors?'
+    default: '5'
+  llm_timeout_ms:
+    required: false
+    description: 'Timeout for llm API call in millis'
+    default: '360000'
+  llm_concurrency_limit:
+    required: false
+    description: 'How many concurrent API calls to make to llm servers?'
+    default: '6'
+  github_concurrency_limit:
+    required: false
+    description: 'How many concurrent API calls to make to GitHub?'
+    default: '6'
+  system_message:
+    required: false
+    description: 'System message to be sent to WatsonX'
+    default: |
+      You are `@SeineSailor`, an AI-powered copilot for project managers.
+      Your purpose is to assist with code reviews, project discussions, and
+      knowledge transfer. You maintain a knowledge base of the project's
+      development history and can provide context-aware support to developers.
+      Focus on understanding the codebase, architecture, and function
+      implementations to provide valuable insights and guidance.
+  summarize:
+    required: false
+    description: 'The prompt for final summarization response'
+    default: |
+      Provide a concise summary of the pull request changes, highlighting the
+      key modifications and their impact on the codebase. Include any relevant
+      observations or suggestions for improvement.
+outputs:
+  myOutput:
+    description: "Output from the action for testing purpose"
+runs:
+  using: 'docker'
+  image: 'docker://ghcr.io/SeineAI/SeineSailor:latest' # change the latest to v1, v2... to separate dev and release

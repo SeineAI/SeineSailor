@@ -1,0 +1,10 @@
+name: My Workflow
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: SeineAI/SeineSailor@master
+      with:
+        llm_light_model: Test from action
