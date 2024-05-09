@@ -77,6 +77,8 @@
             platforms: linux/amd64
             provenance: false
             sbom: false
+            cache-from: type=gha
+            cache-to: type=gha,mode=max
 #    create_discussion:
 #      needs: create_release
 #      runs-on: ubuntu-latest
