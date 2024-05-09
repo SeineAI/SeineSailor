@@ -2,5 +2,8 @@ python-dotenv
 ibm-cos-sdk
 ibm-watsonx-ai
 langchain
+langchain-ibm
+langchain-openai
+langchain-community
 tiktoken
 PyGithub
