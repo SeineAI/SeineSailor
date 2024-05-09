@@ -72,8 +72,8 @@
             push: true
             tags: |
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-#              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.create_release.outputs.full-tag }}
-#              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.create_release.outputs.short-tag }}
+              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.create_release.outputs.full-tag }}
+              ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.create_release.outputs.short-tag }}
             platforms: linux/amd64
             provenance: false
             sbom: false
