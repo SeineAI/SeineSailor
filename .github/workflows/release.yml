@@ -1,6 +1,6 @@
 ---
   name: Release
-
+  # modified based on https://github.com/github/issue-metrics
   on:
     workflow_dispatch:
     pull_request:
