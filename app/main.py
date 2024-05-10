@@ -5,7 +5,8 @@ from bot import Bot
 from review import code_review
 from review_comment import handle_review_comment
 
-def run():
+
+def main():
     options = Options(
         debug=os.environ.get("INPUT_DEBUG", False),
         disable_review=os.environ.get("INPUT_DISABLE_REVIEW", False),
@@ -57,5 +58,6 @@ def run():
     except Exception as e:
         print(f"Failed to run: {e}")
 
+
 if __name__ == "__main__":
-    run()
+    main()
