@@ -1,58 +1,21 @@
-import os
 import re
-import json
 import base64
 import asyncio
 from typing import List, Tuple
-from github import Github
-from github.Repository import Repository
 from options import Options
 from prompts import Prompts
-from commenter import Commenter, COMMENT_REPLY_TAG, RAW_SUMMARY_END_TAG, RAW_SUMMARY_START_TAG, SHORT_SUMMARY_END_TAG, \
+from commenter import COMMENT_REPLY_TAG, RAW_SUMMARY_END_TAG, RAW_SUMMARY_START_TAG, SHORT_SUMMARY_END_TAG, \
     SHORT_SUMMARY_START_TAG, SUMMARIZE_TAG
 from inputs import Inputs
 from tokenizer import get_token_count
 from bot import Bot
+from context import commenter, event_data, pr_data, ignore_keyword, repo
 from logger import setup_logger
 
 logger = setup_logger("review")
 
 
-# Load GitHub Actions context
-def load_github_context():
-    event_path = os.getenv("GITHUB_EVENT_PATH")
-    repo_name = os.getenv("GITHUB_REPOSITORY")
-
-    if not event_path or not repo_name:
-        raise ValueError("GITHUB_EVENT_PATH or GITHUB_REPOSITORY is missing.")
-
-    with open(event_path, 'r') as file:
-        event_data = json.load(file)
-
-    owner, repo = repo_name.split('/')
-    return event_data, owner, repo
-
-
-# Initialize GitHub client and context
-token = os.environ.get("GITHUB_TOKEN")
-if not token:
-    raise ValueError("GITHUB_TOKEN environment variable is missing.")
-
-github_client = Github(token)
-event_data, owner, repo_name = load_github_context()
-repo: Repository = github_client.get_repo(f"{owner}/{repo_name}")
-
-# Extract Pull Request information from the event data
-if "pull_request" in event_data:
-    pr_data = event_data["pull_request"]
-else:
-    raise ValueError("No pull_request data found in the event payload.")
-
-ignore_keyword = "@SeineSailor: ignore"
-
-
 async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts: Prompts):
-    commenter = Commenter()
     llm_concurrency_limit = asyncio.Semaphore(options.llm_concurrency_limit)
     github_concurrency_limit = asyncio.Semaphore(options.github_concurrency_limit)
 
@@ -84,7 +47,7 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
         inputs.short_summary = commenter.get_short_summary(existing_summarize_cmt_body)
         existing_commit_ids_block = commenter.get_reviewed_commit_ids_block(existing_summarize_cmt_body)
 
-    all_commit_ids = await commenter.get_all_commit_ids()
+    all_commit_ids = await commenter.get_all_commit_ids(pr_data["number"])
     highest_reviewed_commit_id = ""
     if existing_commit_ids_block:
         highest_reviewed_commit_id = commenter.get_highest_reviewed_commit_id(
@@ -136,19 +99,19 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
         return
 
     async def retrieve_file_contents(file: dict) -> Tuple[str, str, str, List[Tuple[int, int, str]]]:
-        file_content = ""
+        file_content_inner = ""
         async with github_concurrency_limit:
             try:
                 contents = repo.get_contents(file["filename"], ref=pr_data["base"]["sha"])
                 if contents.type == "file" and contents.content:
-                    file_content = base64.b64decode(contents.content).decode("utf-8")
+                    file_content_inner = base64.b64decode(contents.content).decode("utf-8")
             except Exception as e:
                 logger.warning(f"Failed to get file contents: {e}. This is OK if it's a new file.")
 
-        file_diff = file.get("patch", "")
+        file_diff_inner = file.get("patch", "")
 
         patches = []
-        for patch in split_patch(file_diff):
+        for patch in split_patch(file_diff_inner):
             patch_lines = patch_start_end_line(patch)
             if patch_lines is None:
                 continue
@@ -169,10 +132,10 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
             patches.append((patch_lines["new_hunk"]["start_line"], patch_lines["new_hunk"]["end_line"], hunks_str))
 
         if patches:
-            return file["filename"], file_content, file_diff, patches
+            return file["filename"], file_content_inner, file_diff_inner, patches
         else:
             # Return default values for each part of the tuple
-            return file["filename"], file_content, file_diff, []
+            return file["filename"], file_content_inner, file_diff_inner, []
 
     async def semaphore_github(file):
         async with github_concurrency_limit:
@@ -193,7 +156,8 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
 
     status_msg = f'''<details>
 <summary>Commits</summary>
-Files that changed from the base of the PR and between {highest_reviewed_commit_id} and {pr_data["head"]["sha"]} commits.
+Files that changed from the base of the PR and between {highest_reviewed_commit_id} 
+and {pr_data["head"]["sha"]} commits.
 </details>
 {"" if not files_and_changes else f"""
 <details>
@@ -214,20 +178,20 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
 
     in_progress_summarize_cmt = commenter.add_in_progress_status(existing_summarize_cmt_body, status_msg)
 
-    await commenter.comment(in_progress_summarize_cmt, SUMMARIZE_TAG, "replace")
+    await commenter.comment(in_progress_summarize_cmt, SUMMARIZE_TAG, "replace", pr_data["number"])
 
     summaries_failed = []
 
-    async def do_summary(filename: str, file_content: str, file_diff: str) -> Tuple[str, str, bool]:
+    async def do_summary(filename: str, file_content_summary: str, file_diff_summary: str) -> Tuple[str, str, bool]:
         logger.info(f"summarize: {filename}")
         ins = inputs.clone()
-        if not file_diff:
+        if not file_diff_summary:
             logger.warning(f"summarize: file_diff is empty, skip {filename}")
             summaries_failed.append(f"{filename} (empty diff)")
             return filename, "", False
 
         ins.filename = filename
-        ins.file_diff = file_diff
+        ins.file_diff = file_diff_summary
 
         summarize_prompt = prompts.render_summarize_file_diff(ins, options.review_simple_changes)
         tokens = get_token_count(summarize_prompt)
@@ -238,26 +202,26 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
             return filename, "", False
 
         try:
-            summarize_resp = await light_bot.chat(summarize_prompt)
+            summarize_response = await light_bot.chat(summarize_prompt)
 
-            if not summarize_resp:
+            if not summarize_response:
                 logger.info("summarize: nothing obtained from llm")
                 summaries_failed.append(f"{filename} (nothing obtained from llm)")
                 return filename, "", False
             else:
                 if not options.review_simple_changes:
                     triage_regex = r"\[TRIAGE\]:\s*(NEEDS_REVIEW|APPROVED)"
-                    triage_match = re.search(triage_regex, summarize_resp)
+                    triage_match = re.search(triage_regex, summarize_response)
 
                     if triage_match:
                         triage = triage_match.group(1)
                         needs_review = triage == "NEEDS_REVIEW"
 
-                        summary = re.sub(triage_regex, "", summarize_resp).strip()
+                        summary = re.sub(triage_regex, "", summarize_response).strip()
                         logger.info(f"filename: {filename}, triage: {triage}")
                         return filename, summary, needs_review
 
-                return filename, summarize_resp, True
+                return filename, summarize_response, True
         except Exception as e:
             logger.warning(f"summarize: error from llm: {e}")
             summaries_failed.append(f"{filename} (error from llm: {e})")
@@ -267,9 +231,9 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
     skipped_files = []
     for filename, file_content, file_diff, _ in files_and_changes:
         if options.max_files <= 0 or len(summary_promises) < options.max_files:
-            async def semaphore_summary(filename, file_content, file_diff):
+            async def semaphore_summary(filename, f_content, f_diff):
                 async with llm_concurrency_limit:
-                    return await do_summary(filename, file_content, file_diff)
+                    return await do_summary(filename, f_content, f_diff)
 
             summary_promises.append(
                 semaphore_summary(filename, file_content, file_diff)
@@ -308,8 +272,8 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
             message = "### Summary by SeineSailor\n\n" + release_notes_response
             try:
                 await commenter.update_description(pr_data["number"], message)
-            except Exception as e:
-                logger.warning(f"release notes: error from github: {e}")
+            except Exception as err:
+                logger.warning(f"release notes: error from github: {err}")
 
     summarize_short_response = await heavy_bot.chat(prompts.render_summarize_short(inputs))
     inputs.short_summary = summarize_short_response
@@ -329,7 +293,9 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
 #
 # ### SeineSailor Pro
 #
-# If you like this project, please support us by purchasing the [Pro version](https://SeineSailor.ai). The Pro version has advanced context, superior noise reduction and several proprietary improvements compared to the open source version. Moreover, SeineSailor Pro is free for open source projects.
+# If you like this project, please support us by purchasing the [Pro version](https://SeineSailor.ai).
+    # The Pro version has advanced context, superior noise reduction and several proprietary improvements compared to
+    # the open source version. Moreover, SeineSailor Pro is free for open source projects.
 #
 # </details>
 # """
@@ -369,7 +335,7 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
         lgtm_count = 0
         review_count = 0
 
-        async def do_review(filename: str, file_content: str, patches: List[Tuple[int, int, str]]):
+        async def do_review(filename: str, f_content: str, patches: List[Tuple[int, int, str]]):
             nonlocal lgtm_count, review_count
             logger.info(f"reviewing {filename}")
             ins = inputs.clone()
@@ -381,7 +347,8 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
                 patch_tokens = get_token_count(patch)
                 if tokens + patch_tokens > options.heavy_token_limits.request_tokens:
                     logger.info(
-                        f"only packing {patches_to_pack} / {len(patches)} patches, tokens: {tokens} / {options.heavy_token_limits.request_tokens}")
+                        f"only packing {patches_to_pack} / {len(patches)} patches, "
+                        f"tokens: {tokens} / {options.heavy_token_limits.request_tokens}")
                     break
                 tokens += patch_tokens
                 patches_to_pack += 1
@@ -394,7 +361,8 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
 
                 if patches_packed >= patches_to_pack:
                     logger.info(
-                        f"unable to pack more patches into this request, packed: {patches_packed}, total patches: {len(patches)}, skipping.")
+                        f"unable to pack more patches into this request, "
+                        f"packed: {patches_packed}, total patches: {len(patches)}, skipping.")
                     if options.debug:
                         logger.info(f"prompt so far: {prompts.render_review_file_diff(ins)}")
                     break
@@ -473,9 +441,9 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
         review_promises = []
         for filename, file_content, _, patches in files_and_changes_review:
             if options.max_files <= 0 or len(review_promises) < options.max_files:
-                async def semaphore_review(filename, file_content, patches):
+                async def semaphore_review(filename, f_content, patches):
                     async with llm_concurrency_limit:
-                        return await do_review(filename, file_content, patches)
+                        return await do_review(filename, f_content, patches)
 
                 review_promises.append(
                     semaphore_review(filename, file_content, patches)
@@ -517,7 +485,8 @@ Invite the bot into a review comment chain by tagging @SeineSailor in a reply.
 
 Code suggestions
 
-The bot may make code suggestions, but please review them carefully before committing since the line number ranges may be misaligned.
+The bot may make code suggestions, 
+but please review them carefully before committing since the line number ranges may be misaligned.
 You can edit the comment made by the bot and manually tweak the suggestion if it is slightly off.
 
 Pausing incremental reviews
@@ -526,7 +495,8 @@ Add @SeineSailor: ignore anywhere in the PR description to pause further reviews
 
 </details>
 '''
-        summarize_comment += f"""\n{commenter.add_reviewed_commit_id(existing_commit_ids_block, pr_data["head"]["sha"])}"""
+        summarize_comment += f"""\n{commenter.add_reviewed_commit_id(existing_commit_ids_block,
+                                                                     pr_data["head"]["sha"])}"""
 
         await commenter.submit_review(
             pr_data["number"],
@@ -534,7 +504,7 @@ Add @SeineSailor: ignore anywhere in the PR description to pause further reviews
             status_msg
         )
 
-    await commenter.comment(summarize_comment, SUMMARIZE_TAG, "replace")
+    await commenter.comment(summarize_comment, SUMMARIZE_TAG, "replace", pr_data["number"])
 
 
 def split_patch(patch: str) -> List[str]:
@@ -611,7 +581,7 @@ def parse_patch(patch: str) -> dict:
             new_line += 1
         else:
             old_hunk_lines.append(line)
-            if removal_only or (current_line > skip_start and current_line <= len(lines) - skip_end):
+            if removal_only or (skip_start < current_line <= len(lines) - skip_end):
                 new_hunk_lines.append(f"{new_line}: {line}")
             else:
                 new_hunk_lines.append(line)
@@ -698,11 +668,15 @@ def parse_review(response: str, patches: List[Tuple[int, int, str]], debug=False
 
             if not within_patch:
                 if best_patch_start_line != -1 and best_patch_end_line != -1:
-                    review.comment = f"> Note: This review was outside of the patch, so it was mapped to the patch with the greatest overlap. Original lines [{review.start_line}-{review.end_line}]\n\n{review.comment}"
+                    review.comment = (f"> Note: This review was outside of the patch, "
+                                      f"so it was mapped to the patch with the greatest overlap. "
+                                      f"Original lines [{review.start_line}-{review.end_line}]\n\n{review.comment}")
                     review.start_line = best_patch_start_line
                     review.end_line = best_patch_end_line
                 else:
-                    review.comment = f"> Note: This review was outside of the patch, but no patch was found that overlapped with it. Original lines [{review.start_line}-{review.end_line}]\n\n{review.comment}"
+                    review.comment = (f"> Note: This review was outside of the patch, "
+                                      f"but no patch was found that overlapped with it. "
+                                      f"Original lines [{review.start_line}-{review.end_line}]\n\n{review.comment}")
                     review.start_line = patches[0][0]
                     review.end_line = patches[0][1]
 

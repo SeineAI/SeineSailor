@@ -30,6 +30,16 @@ class Commenter:
         self.issue_comments_cache: Dict[int, List[IssueComment]] = {}
         self.review_comments_buffer: List[Dict] = []
 
+    def _get_target(self, context: Dict) -> Optional[int]:
+        """Get target number from context (pull request or issue)"""
+        if "pull_request" in context and context["pull_request"] is not None:
+            return context["pull_request"]["number"]
+        elif "issue" in context and context["issue"] is not None:
+            return context["issue"]["number"]
+        else:
+            logger.warning("Skipped: context.payload.pull_request and context.payload.issue are both null")
+            return None
+
     async def comment(self, message: str, tag: str, mode: str, target: int):
         if not tag:
             tag = COMMENT_TAG
@@ -130,13 +140,14 @@ class Commenter:
         except Exception as e:
             logger.warning(f"Failed to list reviews: {e}")
 
-    async def submit_review(self, pull_number: int, status_msg: str):
+    async def submit_review(self, pull_number: int, commit_id: str, status_msg: str):
         body = f"{COMMENT_GREETING}\n\n{status_msg}\n"
 
         if len(self.review_comments_buffer) == 0:
             logger.info(f"Submitting empty review for PR #{pull_number}")
             try:
                 self.repo.get_pull(pull_number).create_review(
+                    commit=self.repo.get_commit(sha=commit_id),
                     event="COMMENT",
                     body=body
                 )
@@ -153,12 +164,13 @@ class Commenter:
             }
 
             review = self.repo.get_pull(pull_number).create_review(
+                commit=self.repo.get_commit(sha=commit_id),
                 event="COMMENT",
                 comments=[generate_comment_data(comment) for comment in self.review_comments_buffer]
             )
 
-            logger.info(
-                f"Submitting review for PR #{pull_number}, total comments: {len(self.review_comments_buffer)}, review id: {review.id}")
+            logger.info(f"Submitting review for PR #{pull_number}, "
+                        f"total comments: {len(self.review_comments_buffer)}, review id: {review.id}")
 
         except Exception as e:
             logger.warning(f"Failed to create review: {e}. Falling back to individual comments.")
@@ -167,6 +179,7 @@ class Commenter:
             for i, comment in enumerate(self.review_comments_buffer, start=1):
                 try:
                     self.repo.get_pull(pull_number).create_review_comment(
+                        commit=self.repo.get_commit(sha=commit_id),
                         path=comment["path"],
                         body=comment["message"],
                         line=comment["end_line"],
