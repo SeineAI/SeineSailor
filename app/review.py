@@ -137,12 +137,13 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
 
     async def retrieve_file_contents(file: dict) -> Tuple[str, str, str, List[Tuple[int, int, str]]]:
         file_content = ""
-        try:
-            contents = repo.get_contents(file["filename"], ref=pr_data["base"]["sha"])
-            if contents.type == "file" and contents.content:
-                file_content = base64.b64decode(contents.content).decode("utf-8")
-        except Exception as e:
-            logger.warning(f"Failed to get file contents: {e}. This is OK if it's a new file.")
+        async with github_concurrency_limit:
+            try:
+                contents = repo.get_contents(file["filename"], ref=pr_data["base"]["sha"])
+                if contents.type == "file" and contents.content:
+                    file_content = base64.b64decode(contents.content).decode("utf-8")
+            except Exception as e:
+                logger.warning(f"Failed to get file contents: {e}. This is OK if it's a new file.")
 
         file_diff = file.get("patch", "")
 
@@ -170,11 +171,16 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
         if patches:
             return file["filename"], file_content, file_diff, patches
         else:
-            return None
+            # Return default values for each part of the tuple
+            return file["filename"], file_content, file_diff, []
+
+    async def semaphore_github(file):
+        async with github_concurrency_limit:
+            return await retrieve_file_contents(file)
 
     filtered_files = await asyncio.gather(
         *[
-            retrieve_file_contents({"filename": file.filename, "patch": file.patch})
+            semaphore_github({"filename": file.filename, "patch": file.patch})
             for file in filter_selected_files
         ]
     )
@@ -218,7 +224,7 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
         if not file_diff:
             logger.warning(f"summarize: file_diff is empty, skip {filename}")
             summaries_failed.append(f"{filename} (empty diff)")
-            return None
+            return filename, "", False
 
         ins.filename = filename
         ins.file_diff = file_diff
@@ -229,7 +235,7 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
         if tokens > options.light_token_limits.request_tokens:
             logger.info(f"summarize: diff tokens exceeds limit, skip {filename}")
             summaries_failed.append(f"{filename} (diff tokens exceeds limit)")
-            return None
+            return filename, "", False
 
         try:
             summarize_resp = await light_bot.chat(summarize_prompt)
@@ -237,7 +243,7 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
             if not summarize_resp:
                 logger.info("summarize: nothing obtained from llm")
                 summaries_failed.append(f"{filename} (nothing obtained from llm)")
-                return None
+                return filename, "", False
             else:
                 if not options.review_simple_changes:
                     triage_regex = r"\[TRIAGE\]:\s*(NEEDS_REVIEW|APPROVED)"
@@ -255,14 +261,18 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
         except Exception as e:
             logger.warning(f"summarize: error from llm: {e}")
             summaries_failed.append(f"{filename} (error from llm: {e})")
-            return None
+            return filename, "", False
 
     summary_promises = []
     skipped_files = []
     for filename, file_content, file_diff, _ in files_and_changes:
         if options.max_files <= 0 or len(summary_promises) < options.max_files:
+            async def semaphore_summary(filename, file_content, file_diff):
+                async with llm_concurrency_limit:
+                    return await do_summary(filename, file_content, file_diff)
+
             summary_promises.append(
-                llm_concurrency_limit(do_summary(filename, file_content, file_diff))
+                semaphore_summary(filename, file_content, file_diff)
             )
         else:
             skipped_files.append(filename)
@@ -311,18 +321,18 @@ Files that changed from the base of the PR and between {highest_reviewed_commit_
 {SHORT_SUMMARY_START_TAG}
 {inputs.short_summary}
 {SHORT_SUMMARY_END_TAG}
-
----
-
-<details>
-<summary>Uplevel your code reviews with SeineSailor Pro</summary>
-
-### SeineSailor Pro
-
-If you like this project, please support us by purchasing the [Pro version](https://SeineSailor.ai). The Pro version has advanced context, superior noise reduction and several proprietary improvements compared to the open source version. Moreover, SeineSailor Pro is free for open source projects.
-
-</details>
 """
+# ---
+#
+# <details>
+# <summary>Uplevel your code reviews with SeineSailor Pro</summary>
+#
+# ### SeineSailor Pro
+#
+# If you like this project, please support us by purchasing the [Pro version](https://SeineSailor.ai). The Pro version has advanced context, superior noise reduction and several proprietary improvements compared to the open source version. Moreover, SeineSailor Pro is free for open source projects.
+#
+# </details>
+# """
 
     status_msg += f'''
 {"" if not skipped_files else f"""
@@ -463,8 +473,12 @@ If you like this project, please support us by purchasing the [Pro version](http
         review_promises = []
         for filename, file_content, _, patches in files_and_changes_review:
             if options.max_files <= 0 or len(review_promises) < options.max_files:
+                async def semaphore_review(filename, file_content, patches):
+                    async with llm_concurrency_limit:
+                        return await do_review(filename, file_content, patches)
+
                 review_promises.append(
-                    llm_concurrency_limit(do_review(filename, file_content, patches))
+                    semaphore_review(filename, file_content, patches)
                 )
             else:
                 skipped_files.append(filename)
@@ -496,7 +510,7 @@ LGTM: {lgtm_count}
 
 <details>
 <summary>Tips</summary>
-Chat with <img src="https://avatars.githubusercontent.com/in/347564?s=41&u=fad245b8b4c7254fe63dd4dcd4d662ace122757e&v=4" alt="Image description" width="20" height="20">  SeineSailor (@SeineSailor)
+Chat with SeineSailor (@SeineSailor)
 
 Reply on review comments left by this bot to ask follow-up questions. A review comment is a comment on a diff or a file.
 Invite the bot into a review comment chain by tagging @SeineSailor in a reply.
@@ -635,8 +649,8 @@ def parse_review(response: str, patches: List[Tuple[int, int, str]], debug=False
             code_block = comment[code_block_start_index + len(code_block_start):code_block_end_index]
             sanitized_block = line_number_regex.sub("", code_block)
 
-            comment = comment[:code_block_start_index + len(code_block_start)] + sanitized_block + comment[
-                                                                                                   code_block_end_index:]
+            comment = (comment[:code_block_start_index + len(code_block_start)]
+                       + sanitized_block + comment[code_block_end_index:])
 
             code_block_start_index = comment.find(code_block_start,
                                                   code_block_start_index + len(code_block_start) + len(
