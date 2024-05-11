@@ -36,11 +36,24 @@ jobs:
       (github.event_name == 'discussion' && contains(github.event.discussion.body, '@SeineSailor'))
     runs-on: ubuntu-latest
     steps:
+      - name: Check for mention outside of quotes in comments
+        id: check_mention
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          if echo "$COMMENT_BODY" | grep -v '^>' | grep -q '@SeineSailor'; then
+            echo "::set-output name=found::true"
+          else
+            echo "::set-output name=found::false"
+          fi
       - name: Checkout code
+        if: steps.check_mention.outputs.found == 'true'
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.ref || github.head_ref }}
       - name: Print event payload
+        if: steps.check_mention.outputs.found == 'true'
         run: cat $GITHUB_EVENT_PATH
       - name: Print event repo_name
+        if: steps.check_mention.outputs.found == 'true'
         run: echo $GITHUB_REPOSITORY
