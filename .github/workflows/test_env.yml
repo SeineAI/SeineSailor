@@ -42,18 +42,17 @@ jobs:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           if echo "$COMMENT_BODY" | grep -v '^>' | grep -q '@SeineSailor'; then
-            echo "::set-output name=found::true"
+            echo "mention_outside_quotes=true" >> $GITHUB_ENV
           else
-            echo "::set-output name=found::false"
-          fi
+            echo "mention_outside_quotes=false" >> $GITHUB_ENV
       - name: Checkout code
-        if: steps.check_mention.outputs.found == 'true'
+        if: env.mention_outside_quotes == 'true'
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.ref || github.head_ref }}
       - name: Print event payload
-        if: steps.check_mention.outputs.found == 'true'
+        if: env.mention_outside_quotes == 'true'
         run: cat $GITHUB_EVENT_PATH
       - name: Print event repo_name
-        if: steps.check_mention.outputs.found == 'true'
+        if: env.mention_outside_quotes == 'true'
         run: echo $GITHUB_REPOSITORY
