@@ -7,16 +7,22 @@ permissions:
   discussions: write
 
 on:
+  issues:
+    types: [opened, edited]
   issue_comment:
-    types: [created]
+    types: [created, edited]
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, review_requested]
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, review_requested]
+  pull_request_review:
+    types: [submitted, edited]
   pull_request_review_comment:
-    types: [created]
+    types: [created, edited]
   discussion:
-    types: [created]
+    types: [created, edited]
+  discussion_comment:
+    types: [created, edited]
 
 concurrency:
   group:
@@ -24,20 +30,44 @@ concurrency:
     github.sha }}-${{ github.workflow }}-${{ github.event_name ==
     'pull_request_review_comment' && 'pr_comment' || 
     github.event_name == 'issue_comment' && 'issue' || 
-    github.event_name == 'discussion' && 'discussion' }}
+    github.event_name == 'discussion_comment' && 'discussion' }}
   cancel-in-progress: true
 
 jobs:
   seinesailor:
-    if: contains(github.event.comment.body, '@SeineSailor')
+    if: |
+      (contains(github.event.comment.body, '@SeineSailor') && (
+        github.event_name == 'issue_comment' || 
+        github.event_name == 'pull_request_review_comment' ||
+        github.event_name == 'discussion_comment')) ||
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@SeineSailor')) ||
+      ((github.event_name == 'pull_request' || 
+      github.event_name == 'pull_request_target') && contains(github.event.pull_request.body, '@SeineSailor')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@SeineSailor')) ||
+      (github.event_name == 'discussion' && contains(github.event.discussion.body, '@SeineSailor'))
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Check for mention outside of quotes in comments
+        id: check_mention
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          echo "checking for mention outside of quotes"
+          if echo "$COMMENT_BODY" | grep -v '^>' | grep -q '@SeineSailor'; then
+            echo "mention_outside_quotes=true" >> $GITHUB_ENV
+          else
+            echo "mention_outside_quotes=false" >> $GITHUB_ENV
+          fi
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          repository: ${{github.event.pull_request.head.repo.full_name}}
-          ref: ${{github.event.pull_request.head.ref}}
-          submodules: false
-      - uses: ./
+          ref: ${{ github.event.pull_request.head.ref || github.head_ref }}
+      - name: Print event payload
+        run: cat $GITHUB_EVENT_PATH
+      - name: Print event repo_name
+        run: echo $GITHUB_REPOSITORY
+      - name: Run SeineSailor
+        uses: ./
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
