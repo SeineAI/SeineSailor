@@ -41,10 +41,12 @@ jobs:
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
+          echo "checking for mention outside of quotes"
           if echo "$COMMENT_BODY" | grep -v '^>' | grep -q '@SeineSailor'; then
             echo "mention_outside_quotes=true" >> $GITHUB_ENV
           else
             echo "mention_outside_quotes=false" >> $GITHUB_ENV
+          fi
       - name: Checkout code
         if: env.mention_outside_quotes == 'true'
         uses: actions/checkout@v3
