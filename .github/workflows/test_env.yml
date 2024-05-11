@@ -10,6 +10,10 @@ permissions:
 on:
   issue_comment:
     types: [created, edited]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_target:
+    types: [opened, synchronize, reopened]
   pull_request_review_comment:
     types: [created, edited]
   discussion_comment:
@@ -36,4 +40,4 @@ jobs:
       - name: Print event payload
         run: cat $GITHUB_EVENT_PATH
       - name: Print event repo_name
-        run: cat $GITHUB_REPOSITORY
+        run: echo $GITHUB_REPOSITORY
