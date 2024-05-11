@@ -17,15 +17,6 @@ on:
   discussion_comment:
     types: [created, edited]
 
-concurrency:
-  group:
-    ${{ github.repository }}-${{ github.event.number || github.head_ref ||
-    github.sha }}-${{ github.workflow }}-${{ github.event_name ==
-    'pull_request_review_comment' && 'pr_comment' || 
-    github.event_name == 'issue_comment' && 'issue' || 
-    github.event_name == 'discussion_comment' && 'discussion' }}
-  cancel-in-progress: true
-
 jobs:
   seinesailor:
     if: contains(github.event.comment.body, '@SeineSailor')
