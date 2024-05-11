@@ -16,6 +16,8 @@ on:
     types: [opened, synchronize, reopened, review_requested]
   pull_request_target:
     types: [opened, synchronize, reopened, review_requested]
+  pull_request_review:
+    types: [submitted, edited]
   pull_request_review_comment:
     types: [created, edited]
   discussion:
@@ -24,8 +26,13 @@ on:
     types: [created, edited]
 
 jobs:
-  seinesailor:
-    if: contains(github.event.comment.body, '@SeineSailor')
+  payload_test:
+    if: |
+      contains(github.event.comment.body, '@SeineSailor') ||
+      contains(github.event.pull_request.body, '@SeineSailor') ||
+      contains(github.event.review.body, '@SeineSailor') ||
+      contains(github.event.issue.body, '@SeineSailor') ||
+      contains(github.event.discussion.body, '@SeineSailor')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
