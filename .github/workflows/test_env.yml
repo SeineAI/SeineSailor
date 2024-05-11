@@ -1,0 +1,39 @@
+name: payload test
+# This workflow is for inspecting the payload of various triggering event.
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  discussions: write
+
+on:
+  issue_comment:
+    types: [created, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+  discussion_comment:
+    types: [created, edited]
+
+concurrency:
+  group:
+    ${{ github.repository }}-${{ github.event.number || github.head_ref ||
+    github.sha }}-${{ github.workflow }}-${{ github.event_name ==
+    'pull_request_review_comment' && 'pr_comment' || 
+    github.event_name == 'issue_comment' && 'issue' || 
+    github.event_name == 'discussion_comment' && 'discussion' }}
+  cancel-in-progress: true
+
+jobs:
+  seinesailor:
+    if: contains(github.event.comment.body, '@SeineSailor')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.head_ref }}
+      - name: Print event payload
+        run: cat $GITHUB_EVENT_PATH
+      - name: Print event repo_name
+        run: cat $GITHUB_REPOSITORY
