@@ -29,10 +29,11 @@ jobs:
   payload_test:
     if: |
       contains(github.event.comment.body, '@SeineSailor') ||
-      contains(github.event.pull_request.body, '@SeineSailor') ||
-      contains(github.event.review.body, '@SeineSailor') ||
-      contains(github.event.issue.body, '@SeineSailor') ||
-      contains(github.event.discussion.body, '@SeineSailor')
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@SeineSailor')) ||
+      ((github.event_name == 'pull_request' || 
+      github.event_name == 'pull_request_target') && contains(github.event.pull_request.body, '@SeineSailor')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@SeineSailor')) ||
+      (github.event_name == 'discussion' && contains(github.event.discussion.body, '@SeineSailor'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
