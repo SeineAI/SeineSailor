@@ -1,4 +1,5 @@
 import os
+import asyncio
 from options import Options, LLMOptions
 from prompts import Prompts
 from bot import Bot
@@ -6,7 +7,7 @@ from review import code_review
 from review_comment import handle_review_comment
 
 
-def main():
+async def main():
     options = Options(
         debug=os.environ.get("INPUT_DEBUG", False),
         disable_review=os.environ.get("INPUT_DISABLE_REVIEW", False),
@@ -50,9 +51,9 @@ def main():
 
     try:
         if os.environ.get("GITHUB_EVENT_NAME") in ["pull_request", "pull_request_target"]:
-            code_review(light_bot, heavy_bot, options, prompts)
+            await code_review(light_bot, heavy_bot, options, prompts)
         elif os.environ.get("GITHUB_EVENT_NAME") == "pull_request_review_comment":
-            handle_review_comment(heavy_bot, options, prompts)
+            await handle_review_comment(heavy_bot, options, prompts)
         else:
             print("Skipped: this action only works on push events or pull_request")
     except Exception as e:
@@ -60,4 +61,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
