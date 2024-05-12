@@ -1,6 +1,8 @@
 import logging
+import os
 
-def setup_logger(name, level=logging.INFO):
+
+def setup_logger(name, level=int(os.environ.get("SEINE_SAILOR_LOG_LEVEL", logging.INFO))):
     logger = logging.getLogger(name)
     logger.setLevel(level)
 

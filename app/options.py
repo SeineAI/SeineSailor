@@ -1,4 +1,3 @@
-import os
 from typing import List
 from fnmatch import fnmatch
 from logger import setup_logger

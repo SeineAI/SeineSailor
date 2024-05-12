@@ -1,13 +1,8 @@
+import logging
 import os
 import asyncio
 from options import Options, LLMOptions
-from prompts import Prompts
-from bot import Bot
-from review import code_review
-from review_comment import handle_review_comment
 from logger import setup_logger
-
-logger = setup_logger("main")
 
 
 async def main():
@@ -33,7 +28,16 @@ async def main():
         api_type=os.environ.get("INPUT_LLM_API_TYPE", "watsonx")
     )
 
-    options.print()
+    if options.debug:
+        os.environ["SEINE_SAILOR_LOG_LEVEL"] = str(logging.DEBUG)
+        options.print()
+
+    logger = setup_logger("main")
+
+    from prompts import Prompts
+    from bot import Bot
+    from review import code_review
+    from review_comment import handle_review_comment
 
     prompts = Prompts(
         summarize=os.environ.get("INPUT_SUMMARIZE", ""),
