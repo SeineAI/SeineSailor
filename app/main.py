@@ -5,6 +5,9 @@ from prompts import Prompts
 from bot import Bot
 from review import code_review
 from review_comment import handle_review_comment
+from logger import setup_logger
+
+logger = setup_logger("main")
 
 
 async def main():
@@ -48,6 +51,8 @@ async def main():
     except Exception as e:
         print(f"Skipped: failed to create review bot, please check your openai_api_key: {e}")
         return
+
+    logger.debug(f"GITHUB_EVENT_NAME:{os.environ.get('GITHUB_EVENT_NAME')}")
 
     try:
         if os.environ.get("GITHUB_EVENT_NAME") in ["pull_request", "pull_request_target"]:
