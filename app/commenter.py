@@ -40,6 +40,9 @@ class Commenter:
             logger.warning("Skipped: context.payload.pull_request and context.payload.issue are both null")
             return None
 
+    def get_pull_request_comment(self, pull_number: int, comment_id: int) -> PullRequestComment:
+        return self.repo.get_pull(pull_number).get_review_comment(comment_id)
+
     async def comment(self, message: str, tag: str, mode: str, target: int):
         if not tag:
             tag = COMMENT_TAG
@@ -291,7 +294,7 @@ class Commenter:
         page = 1
         while True:
             try:
-                comments = list(self.repo.get_pull(target).get_review_comments(page=page, per_page=100))
+                comments = list(self.repo.get_pull(target).get_review_comments())
                 all_comments.extend(comments)
                 page += 1
                 if not comments or len(comments) < 100:
@@ -311,7 +314,7 @@ class Commenter:
         page = 1
         while True:
             try:
-                comments = list(self.repo.get_issue(number=target).get_comments(page=page, per_page=100))
+                comments = list(self.repo.get_issue(number=target).get_comments())
                 all_comments.extend(comments)
                 page += 1
                 if not comments or len(comments) < 100:

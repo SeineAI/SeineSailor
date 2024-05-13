@@ -44,7 +44,8 @@ async def handle_review_comment(heavy_bot: Bot, options: Options, prompts: Promp
         inputs.diff = comment.get("diff_hunk", "")
         inputs.filename = comment["path"]
 
-        comment_chain_result = await commenter.get_comment_chain(pull_number, comment)
+        comment_obj = commenter.get_pull_request_comment(pull_number, comment['id'])
+        comment_chain_result = await commenter.get_comment_chain(pull_number, comment_obj)
         comment_chain = comment_chain_result["chain"]
         top_level_comment = comment_chain_result["top_level_comment"]
 
@@ -109,7 +110,7 @@ async def handle_review_comment(heavy_bot: Bot, options: Options, prompts: Promp
                     tokens += short_summary_tokens
                     inputs.short_summary = short_summary
 
-            [reply] = await heavy_bot.chat(prompts.render_comment(inputs), {})
+            reply = await heavy_bot.chat(prompts.render_comment(inputs))
 
             await commenter.review_comment_reply(pull_number, top_level_comment, reply)
 
