@@ -75,3 +75,5 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           debug: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

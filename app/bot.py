@@ -8,9 +8,8 @@ from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, HumanMess
 from langchain_core.output_parsers import StrOutputParser
 from langchain_ibm import WatsonxLLM
 
-from options import Options, LLMOptions
-
-from logger import setup_logger
+from app.options import Options, LLMOptions
+from app.logger import setup_logger
 
 logger = setup_logger("bot")
 

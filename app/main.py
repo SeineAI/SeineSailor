@@ -1,8 +1,8 @@
 import logging
 import os
 import asyncio
-from options import Options, LLMOptions
-from logger import setup_logger
+from app.options import Options, LLMOptions
+from app.logger import setup_logger
 
 
 async def main():
@@ -34,10 +34,10 @@ async def main():
 
     logger = setup_logger("main")
 
-    from prompts import Prompts
-    from bot import Bot
-    from review import code_review
-    from review_comment import handle_review_comment
+    from app.prompts import Prompts
+    from app.bot import Bot
+    from app.review import code_review
+    from app.review_comment import handle_review_comment
 
     prompts = Prompts(
         summarize=os.environ.get("INPUT_SUMMARIZE", ""),

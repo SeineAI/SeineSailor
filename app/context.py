@@ -2,8 +2,8 @@ import os
 import json
 from github import Github
 from github.Repository import Repository
-from commenter import Commenter
-from logger import setup_logger
+from app.commenter import Commenter
+from app.logger import setup_logger
 
 logger = setup_logger("context")
 

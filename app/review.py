@@ -2,15 +2,15 @@ import re
 import base64
 import asyncio
 from typing import List, Tuple
-from options import Options
-from prompts import Prompts
-from commenter import COMMENT_REPLY_TAG, RAW_SUMMARY_END_TAG, RAW_SUMMARY_START_TAG, SHORT_SUMMARY_END_TAG, \
+from app.options import Options
+from app.prompts import Prompts
+from app.commenter import COMMENT_REPLY_TAG, RAW_SUMMARY_END_TAG, RAW_SUMMARY_START_TAG, SHORT_SUMMARY_END_TAG, \
     SHORT_SUMMARY_START_TAG, SUMMARIZE_TAG
-from inputs import Inputs
-from tokenizer import get_token_count
-from bot import Bot
-from context import commenter, context, ignore_keyword, repo
-from logger import setup_logger
+from app.inputs import Inputs
+from app.tokenizer import get_token_count
+from app.bot import Bot
+from app.context import commenter, context, ignore_keyword, repo
+from app.logger import setup_logger
 
 logger = setup_logger("review")
 

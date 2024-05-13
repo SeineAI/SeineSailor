@@ -1,4 +1,4 @@
-from inputs import Inputs
+from app.inputs import Inputs
 
 
 class Prompts:

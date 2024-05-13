@@ -2,7 +2,7 @@ import os
 import re
 from typing import List, Dict, Optional
 from github import Repository, IssueComment, PullRequestComment
-from logger import setup_logger
+from app.logger import setup_logger
 
 logger = setup_logger("commenter")
 
