@@ -137,7 +137,7 @@ class Commenter:
             if pending_review:
                 logger.info(f"Deleting pending review for PR #{pull_number} id: {pending_review.id}")
                 try:
-                    self.repo.get_pull(pull_number).dismiss_review(pending_review.id, "Removing pending review")
+                    self.repo.get_pull(pull_number).get_review(pending_review.id).dismiss("Removing pending review")
                 except Exception as e:
                     logger.warning(f"Failed to delete pending review: {e}")
         except Exception as e:
@@ -196,14 +196,14 @@ class Commenter:
         reply = f"{COMMENT_GREETING}\n\n{message}\n\n{COMMENT_REPLY_TAG}"
 
         try:
-            self.repo.get_pull(pull_number).create_reply_for_review_comment(
+            self.repo.get_pull(pull_number).create_review_comment_reply(
                 body=reply,
                 comment_id=top_level_comment.id
             )
         except Exception as e:
             logger.warning(f"Failed to reply to the top-level comment {e}")
             try:
-                self.repo.get_pull(pull_number).create_reply_for_review_comment(
+                self.repo.get_pull(pull_number).create_review_comment_reply(
                     body=f"Could not post the reply due to the following error: {e}",
                     comment_id=top_level_comment.id
                 )
