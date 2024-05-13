@@ -4,7 +4,7 @@ from commenter import COMMENT_REPLY_TAG, COMMENT_TAG, SUMMARIZE_TAG
 from inputs import Inputs
 from tokenizer import get_token_count
 from bot import Bot
-from context import commenter, event_data, pr_data, repo
+from context import commenter, context, repo
 from logger import setup_logger
 
 # Setup logger
@@ -14,29 +14,28 @@ ASK_BOT = "@SeineSailor"
 
 
 async def handle_review_comment(heavy_bot: Bot, options: Options, prompts: Prompts):
-    if event_data["event_name"] != "pull_request_review_comment":
-        logger.warning(f"Skipped: {event_data['event_name']} is not a pull_request_review_comment event")
+    if context["event_name"] != "pull_request_review_comment":
+        logger.warning(f"Skipped: {context['event_name']} is not a pull_request_review_comment event")
         return
 
-    if not event_data.get("payload"):
-        logger.warning(f"Skipped: {event_data['event_name']} event is missing payload")
-        return
-
-    comment = event_data["payload"].get("comment")
+    comment = context["payload"].get("comment")
     if not comment:
-        logger.warning(f"Skipped: {event_data['event_name']} event is missing comment")
+        logger.warning(f"Skipped: {context['event_name']} event is missing comment")
         return
 
-    if not pr_data or not event_data["payload"].get("repository"):
-        logger.warning(f"Skipped: {event_data['event_name']} event is missing pull_request or repository")
+    pr_data = context["payload"].get("pull_request")
+    if not pr_data or not context["payload"].get("repository"):
+        logger.warning(f"Skipped: {context['event_name']} event is missing pull_request or repository")
         return
 
     inputs = Inputs()
     inputs.title = pr_data.get("title", "")
-    inputs.description = commenter.get_description(pr_data.get("body", ""))
+    pr_body = pr_data.get("body")
+    if pr_body:
+        inputs.description = commenter.get_description(pr_body)
 
-    if event_data["payload"].get("action") != "created":
-        logger.warning(f"Skipped: {event_data['event_name']} event is not created")
+    if context["payload"].get("action") != "created":
+        logger.warning(f"Skipped: {context['event_name']} event is not created")
         return
 
     if COMMENT_TAG not in comment["body"] and COMMENT_REPLY_TAG not in comment["body"]:
@@ -115,4 +114,4 @@ async def handle_review_comment(heavy_bot: Bot, options: Options, prompts: Promp
             await commenter.review_comment_reply(pull_number, top_level_comment, reply)
 
     else:
-        logger.info(f"Skipped: {event_data['event_name']} event is from the bot itself")
+        logger.info(f"Skipped: {context['event_name']} event is from the bot itself")

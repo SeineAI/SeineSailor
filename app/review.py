@@ -9,7 +9,7 @@ from commenter import COMMENT_REPLY_TAG, RAW_SUMMARY_END_TAG, RAW_SUMMARY_START_
 from inputs import Inputs
 from tokenizer import get_token_count
 from bot import Bot
-from context import commenter, event_data, pr_data, ignore_keyword, repo
+from context import commenter, context, ignore_keyword, repo
 from logger import setup_logger
 
 logger = setup_logger("review")
@@ -19,13 +19,15 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
     llm_concurrency_limit = asyncio.Semaphore(options.llm_concurrency_limit)
     github_concurrency_limit = asyncio.Semaphore(options.github_concurrency_limit)
 
-    if event_data["event_name"] not in ["pull_request", "pull_request_target"]:
-        logger.warning(f"Skipped: current event is {event_data['event_name']}, only support pull_request event")
+    if context["event_name"] not in ["pull_request", "pull_request_target"]:
+        logger.warning(f"Skipped: current event is {context['event_name']}, only support pull_request event")
         return
 
-    if "pull_request" not in event_data:
+    if "pull_request" not in context:
         logger.warning("Skipped: event data does not contain pull_request")
         return
+    else:
+        pr_data = context.get("pull_request")
 
     inputs = Inputs()
     inputs.title = pr_data.get("title", "")

@@ -7,38 +7,51 @@ from logger import setup_logger
 
 logger = setup_logger("context")
 
-
 # Load GitHub Actions context
-def load_github_context():
-    event_path = os.getenv("GITHUB_EVENT_PATH")
-    repo_name = os.getenv("GITHUB_REPOSITORY")
+event_name = os.environ.get("GITHUB_EVENT_NAME")
+if not event_name:
+    raise ValueError("GITHUB_EVENT_NAME environment variable is missing.")
+else:
+    logger.debug(f"GITHUB_EVENT_NAME:{event_name}")
 
+event_path = os.getenv("GITHUB_EVENT_PATH")
+if not event_path:
+    raise ValueError("GITHUB_EVENT_PATH environment variable is missing.")
+else:
     logger.debug(f"GITHUB_EVENT_PATH:{event_path}")
-    logger.debug(f"GITHUB_REPOSITORY:{repo_name}")
 
-    if not event_path or not repo_name:
-        raise ValueError("GITHUB_EVENT_PATH or GITHUB_REPOSITORY is missing.")
+with open(event_path, 'r') as file:
+    payload = json.load(file)
 
-    with open(event_path, 'r') as file:
-        event_data = json.load(file)
-
-    owner, repo = repo_name.split('/')
-    return event_data, owner, repo
-
+# This is one way to construct the context using the information that we needed in the later code.
+# Another way to mimic the `import {context as github_context} from '@actions/github'` behavior, would be to
+# dump the GitHub context in the yaml file, then load it here.
+# - name: Dump GitHub context
+#         env:
+#           GITHUB_CONTEXT: ${{ toJson(github) }}
+# see https://docs.github.com/en/actions/learn-github-actions/contexts#example-printing-context-information-to-the-log
+context = {
+    "event_name": event_name,
+    "payload": payload
+}
 
 # Initialize GitHub client and context
 token = os.environ.get("GITHUB_TOKEN")
 if not token:
     raise ValueError("GITHUB_TOKEN environment variable is missing.")
-
 github_client = Github(token)
-event_data, owner, repo_name = load_github_context()
-repo: Repository = github_client.get_repo(f"{owner}/{repo_name}")
+
+repository = os.getenv("GITHUB_REPOSITORY")
+if not repository:
+    raise ValueError("GITHUB_REPOSITORY environment variable is missing.")
+else:
+    logger.debug(f"GITHUB_REPOSITORY:{repository}")
+repo: Repository = github_client.get_repo(repository)
 
 # Attempt to retrieve pull request or issue data from the event payload
-pr_data = event_data.get("pull_request")
-issue_data = event_data.get("issue")
-comment_data = event_data.get("comment")
+# pr_data = context.get("pull_request")
+# issue_data = context.get("issue")
+# comment_data = context.get("comment")
 
 ignore_keyword = "@SeineSailor: ignore"
 commenter = Commenter(repo)
