@@ -15,5 +15,5 @@ COPY ./app /app
 FROM gcr.io/distroless/python3-debian12
 COPY --from=builder /app /app
 WORKDIR /app
-ENV PYTHONPATH /app
+ENV PYTHONPATH /
 CMD ["/app/main.py"]
