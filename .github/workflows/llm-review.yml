@@ -53,7 +53,7 @@ jobs:
             echo "mention_outside_quotes=false" >> $GITHUB_ENV
           fi
       - name: Run SeineSailor
-        uses: ./
+        uses: SeineAI/SeineSailor@latest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
