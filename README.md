@@ -6,23 +6,31 @@
 ## Overview
 
 SeineSailor is an AI-powered copilot for project managers, designed to assist with code reviews, project discussions,
-and knowledge transfer. It leverages the power of WatsonX's `llama3` and `mixt-8x7B` models to provide intelligent and
-context-aware support throughout the development lifecycle.
+and knowledge transfer. It leverages the power of WatsonX's `llama3` and `mixtral-8x7b` models to provide intelligent
+and context-aware support throughout the development lifecycle.
 
 ## Features
 
-- **PR Review and Summarization**: SeineSailor can be summoned to review pull requests and provide a summary of the
-  changes when mentioned in a PR comment.
-- **Project Discussion Participation**: SeineSailor can actively participate in project discussions and brainstorming
-  sessions when invited using the `@SeineSailor` mention in issues or other discussion forums.
-- **Knowledge Transfer**: SeineSailor maintains a knowledge base of the project's development history and can assist new
-  developers by answering questions about the codebase, architecture, and function implementations.
-- **Customizable Prompts**: Tailor the `system_message`, `summarize`, and other prompts to focus on specific aspects of
-  the review process or change the review objective.
-
-To use SeineSailor, you need to add the provided YAML file to your repository and configure the required environment
-variables, such as `GITHUB_TOKEN` and `WATSONX_API_KEY`. For more information on usage, examples, and contributing,
-refer to the sections below.
+- **PR Review and Summarization**: SeineSailor provides automated reviews and summaries for pull requests. It analyzes
+  the changes and offers insights to streamline the review process.
+- **Line-by-line code change suggestions**: Reviews the changes line by line and
+  provides code change suggestions.
+- **Continuous, incremental reviews**: Reviews are performed on each commit
+  within a pull request, rather than a one-time review on the entire pull
+  request.
+- **Project Discussion Participation**: Engage SeineSailor in discussions across various forums including pull request
+  review comments, issues and discussions by mentioning `@SeineSailor`. It can contribute to brainstorming, provide
+  clarifications, summarize discussions, suggest code changes, etc.
+- **Knowledge Transfer and Query Resolution**: Leverages a comprehensive knowledge base to assist developers with
+  queries about the codebase, architectural design, and specific functionalities, aiding in faster onboarding and
+  information sharing.
+- **Smart review skipping**: By default, skips in-depth review for simple
+  changes (e.g. typo fixes) and when changes look good for the most part. It can
+  be disabled by setting `review_simple_changes` and `review_comment_lgtm` to
+  `true`.
+- **Customizable prompts**: Tailor the `system_message`, `summarize`, and
+  `summarize_release_notes` prompts to focus on specific aspects of the review
+  process or even change the review objective.
 
 ## Installation
 
@@ -38,44 +46,86 @@ permissions:
   discussions: write
 
 on:
+  issues:
+    types: [ opened ]
   issue_comment:
     types: [ created ]
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [ opened, synchronize, reopened ]
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [ opened, synchronize, reopened ]
   pull_request_review_comment:
     types: [ created ]
   discussion:
+    types: [ created ]
+  discussion_comment:
     types: [ created ]
 
 concurrency:
   group:
     ${{ github.repository }}-${{ github.event.number || github.head_ref ||
-    github.sha }}-${{ github.workflow }}-${{ github.event_name ==
-    'pull_request_review_comment' && 'pr_comment' || 
-    github.event_name == 'issue_comment' && 'issue' || 
-    github.event_name == 'discussion' && 'discussion' }}
-  cancel-in-progress: true
-  
+    github.sha }}-${{ github.workflow }}-${{ (github.event_name ==
+    'pull_request' || github.event_name == 'pull_request_target') && 'pr' || 'comment' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_target' }}
+
 jobs:
   seinesailor:
-    if: contains(github.event.comment.body, '@SeineSailor')
+    if: |
+      (contains(github.event.comment.body, '@SeineSailor') && (
+        github.event_name == 'issue_comment' || 
+        github.event_name == 'pull_request_review_comment' ||
+        github.event_name == 'discussion_comment')) ||
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@SeineSailor')) ||
+      (github.event_name == 'discussion' && contains(github.event.discussion.body, '@SeineSailor'))
     runs-on: ubuntu-latest
     steps:
-      - uses: SeineAI/SeineSailor@latest
+      - name: Check for mention outside of quotes in comments
+        id: check_mention
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          echo "checking for mention outside of quotes"
+          if echo "$COMMENT_BODY" | grep -v '^>' | grep -q '@SeineSailor'; then
+            echo "mention_outside_quotes=true" >> $GITHUB_ENV
+          else
+            echo "mention_outside_quotes=false" >> $GITHUB_ENV
+          fi
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.head_ref }}
+      - name: Print event payload
+        run: cat $GITHUB_EVENT_PATH
+      - name: Print event repo_name
+        run: echo $GITHUB_REPOSITORY
+      - name: Run SeineSailor
+        uses: ./
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
           WATSONX_PROJECT_ID: ${{ secrets.WATSONX_PROJECT_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        with:
+          debug: false
 ```
 
 ### Environment Variables
 
 - `GITHUB_TOKEN`: This should already be available in the GitHub Action environment. It is used to interact with the
   GitHub API.
-- `IBM_CLOUD_API_KEY` and `WATSONX_PROJECT_ID`: Use these to authenticate with the WatsonX API. Please add this key to 
+- `IBM_CLOUD_API_KEY` and `WATSONX_PROJECT_ID`: Use these to authenticate with the WatsonX API. Please add this key to
   your GitHub Action secrets.
+- `OPENAI_API_KEY`: If you want to use OpenAI models instead. Please add this key to your GitHub Action secrets, and
+  set in the last part of yaml:
+
+```yaml
+        with:
+          debug: false
+          llm_api_type: openai
+          llm_light_model: gpt-3.5-turbo
+          llm_heavy_model: gpt-4
+          api_base_url: https://api.openai.com/v1
+```
 
 ## Usage
 
