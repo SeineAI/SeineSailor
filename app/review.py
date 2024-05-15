@@ -23,11 +23,11 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
         logger.warning(f"Skipped: current event is {context['event_name']}, only support pull_request event")
         return
 
-    if "pull_request" not in context:
+    if "pull_request" not in context["payload"]:
         logger.warning("Skipped: event data does not contain pull_request")
         return
     else:
-        pr_data = context.get("pull_request")
+        pr_data = context["payload"].get("pull_request")
 
     inputs = Inputs()
     inputs.title = pr_data.get("title", "")
