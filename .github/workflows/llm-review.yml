@@ -61,3 +61,4 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           debug: true
+          tag: latest # use latest docker image for development

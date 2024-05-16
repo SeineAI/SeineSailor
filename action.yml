@@ -199,9 +199,13 @@ inputs:
       Provide a concise summary of the pull request changes, highlighting the
       key modifications and their impact on the codebase. Include any relevant
       observations or suggestions for improvement.
+  tag:
+    description: 'Tag of the Docker image to use'
+    required: true
+    default: 'stable' # or 'latest' for development
 outputs:
   myOutput:
     description: "Output from the action for testing purpose"
 runs:
   using: 'docker'
-  image: 'docker://ghcr.io/seineai/seine_sailor:latest' # change the latest to v1, v2... to separate dev and release
+  image: 'docker://ghcr.io/seineai/seine_sailor:${{ inputs.tag }}' # change the latest to v1, v2... to separate dev and release
