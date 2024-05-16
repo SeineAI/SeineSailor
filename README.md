@@ -107,6 +107,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           debug: false
+          tag: 'stable' # or 'latest' for development version
 ```
 
 ### Environment Variables
