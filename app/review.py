@@ -108,7 +108,7 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
                 if contents.type == "file" and contents.content:
                     file_content_inner = base64.b64decode(contents.content).decode("utf-8")
             except Exception as e:
-                logger.warning(f"Failed to get file contents: {e}. This is OK if it's a new file.")
+                logger.warning(f"Failed to get file {file['filename']} contents: {e}. This is OK if it's a new file.")
 
         file_diff_inner = file.get("patch", "")
 
@@ -258,13 +258,13 @@ and {pr_data["head"]["sha"]} commits.
 """
             summarize_resp = await heavy_bot.chat(prompts.render_summarize_changesets(inputs))
             if not summarize_resp:
-                logger.warning("summarize: nothing obtained from llm")
+                logger.warning("summarize_resp: nothing obtained from llm")
             else:
                 inputs.raw_summary = summarize_resp
 
     summarize_final_response = await heavy_bot.chat(prompts.render_summarize(inputs))
     if not summarize_final_response:
-        logger.info("summarize: nothing obtained from llm")
+        logger.warning("summarize_final_response: nothing obtained from llm")
 
     if not options.disable_release_notes:
         release_notes_response = await heavy_bot.chat(prompts.render_summarize_release_notes(inputs))
