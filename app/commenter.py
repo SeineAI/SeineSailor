@@ -290,18 +290,11 @@ class Commenter:
         if target in self.review_comments_cache:
             return self.review_comments_cache[target]
 
-        all_comments = []
-        page = 1
-        while True:
-            try:
-                comments = list(self.repo.get_pull(target).get_review_comments())
-                all_comments.extend(comments)
-                page += 1
-                if not comments or len(comments) < 100:
-                    break
-            except Exception as e:
-                logger.warning(f"Failed to list review comments: {e}")
-                break
+        try:
+            all_comments = list(self.repo.get_pull(target).get_review_comments())
+        except Exception as e:
+            logger.warning(f"Failed to list review comments: {e}")
+            all_comments = []
 
         self.review_comments_cache[target] = all_comments
         return all_comments
@@ -310,18 +303,11 @@ class Commenter:
         if target in self.issue_comments_cache:
             return self.issue_comments_cache[target]
 
-        all_comments = []
-        page = 1
-        while True:
-            try:
-                comments = list(self.repo.get_issue(number=target).get_comments())
-                all_comments.extend(comments)
-                page += 1
-                if not comments or len(comments) < 100:
-                    break
-            except Exception as e:
-                logger.warning(f"Failed to list comments: {e}")
-                break
+        try:
+            all_comments = list(self.repo.get_issue(number=target).get_comments())
+        except Exception as e:
+            logger.warning(f"Failed to list comments: {e}")
+            all_comments = []
 
         self.issue_comments_cache[target] = all_comments
         return all_comments
@@ -360,17 +346,11 @@ class Commenter:
 
     async def get_all_commit_ids(self, pull_number: int) -> List[str]:
         all_commits = []
-        page = 1
-        while True:
-            try:
-                commits = list(self.repo.get_pull(pull_number).get_commits(page=page, per_page=100))
-                all_commits.extend([commit.sha for commit in commits])
-                page += 1
-                if not commits or len(commits) < 100:
-                    break
-            except Exception as e:
-                logger.warning(f"Failed to list commits: {e}")
-                break
+        try:
+            commits = list(self.repo.get_pull(pull_number).get_commits())
+            all_commits.extend([commit.sha for commit in commits])
+        except Exception as e:
+            logger.warning(f"Failed to list commits: {e}")
 
         return all_commits
 
