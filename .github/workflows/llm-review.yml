@@ -53,11 +53,13 @@ jobs:
           else
             echo "mention_outside_quotes=false" >> $GITHUB_ENV
           fi
-      - name: Dump GitHub context for debug
-        env:
-          GITHUB_CONTEXT: ${{ toJson(github) }}
-        run: |
-          echo "$GITHUB_CONTEXT"
+#      - name: Dump GitHub context for debug
+#        env:
+#          GITHUB_CONTEXT: ${{ toJson(github) }}
+#        run: |
+#          echo "$GITHUB_CONTEXT"
+      - name: Dump event payload for debug
+        run: cat $GITHUB_EVENT_PATH
       - name: Run SeineSailor
         uses: SeineAI/SeineSailor@latest
         env:
