@@ -78,7 +78,7 @@ jobs:
       - name: Dump event payload for debug
         run: cat $GITHUB_EVENT_PATH
       - name: Run SeineSailor
-        uses: SeineAI/SeineSailor@main
+        uses: SeineAI/SeineSailor@dev
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
@@ -86,4 +86,3 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           debug: true
-          tag: latest # use latest docker image for development
