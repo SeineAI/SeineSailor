@@ -499,7 +499,7 @@ Add @SeineSailor: ignore anywhere in the PR description to pause further reviews
 
         await commenter.submit_review(
             pr_data["number"],
-            commits[-1]["sha"],
+            commits[-1].sha,
             status_msg
         )
 
