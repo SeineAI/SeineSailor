@@ -49,17 +49,13 @@ on:
   issues:
     types: [ opened ]
   issue_comment:
-    types: [ created ]
-  pull_request:
-    types: [ opened, synchronize, reopened ]
-  pull_request_target:
-    types: [ opened, synchronize, reopened ]
+  discussion:
+  discussion_comment:
   pull_request_review_comment:
     types: [ created ]
-  discussion:
-    types: [ created ]
-  discussion_comment:
-    types: [ created ]
+  pull_request:
+  pull_request_target:
+    types: [ opened, synchronize, reopened ]
 
 concurrency:
   group:
@@ -110,14 +106,13 @@ jobs:
       - name: Dump event payload for debug
         run: cat $GITHUB_EVENT_PATH
       - name: Run SeineSailor
-        uses: SeineAI/SeineSailor@latest
+        uses: SeineAI/SeineSailor@main # or release version tags
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
           WATSONX_PROJECT_ID: ${{ secrets.WATSONX_PROJECT_ID }}
         with:
           debug: false
-          tag: stable # or 'latest' for development version
 ```
 
 ### Environment Variables
@@ -164,6 +159,9 @@ history.
 
 Contributions to SeineSailor are welcome! If you have any suggestions, bug reports, or feature requests, please open an
 issue on the [GitHub repository](https://github.com/SeineAI/SeineSailor).
+
+Important! Please read [Contributing_README.md](docs/Contributing_README.md) to understand how we separate production 
+and development process.
 
 ## License
 
