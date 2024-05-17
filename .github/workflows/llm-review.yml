@@ -47,12 +47,29 @@ jobs:
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
-          echo "checking for mention outside of quotes"
-          if echo "$COMMENT_BODY" | grep -v '^>' | grep -q '@SeineSailor'; then
-            echo "mention_outside_quotes=true" >> $GITHUB_ENV
-          else
-            echo "mention_outside_quotes=false" >> $GITHUB_ENV
-          fi
+          echo "checking for mention outside of quotes and code blocks"
+          mention_outside_quotes=false
+          in_code_block=false
+          while IFS= read -r line; do
+            # Check for start or end of a code block
+            if [[ "$line" =~ ^\`\`\` ]]; then
+              if [[ "$in_code_block" = true ]]; then
+                in_code_block=false
+              else
+                in_code_block=true
+              fi
+            fi
+        
+            # Process lines that are not in a code block or quoted
+            if [[ "$in_code_block" = false && ! "$line" =~ ^\> ]]; then
+              if echo "$line" | grep -q '@SeineSailor'; then
+                mention_outside_quotes=true
+                break
+              fi
+            fi
+          done <<< "$COMMENT_BODY"
+          echo "mention_outside_quotes=$mention_outside_quotes" >> $GITHUB_ENV
+
 #      - name: Dump GitHub context for debug
 #        env:
 #          GITHUB_CONTEXT: ${{ toJson(github) }}
