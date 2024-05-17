@@ -64,13 +64,14 @@ on:
 concurrency:
   group:
     ${{ github.repository }}-${{ github.event.number || github.head_ref ||
-    github.sha }}-${{ github.workflow }}-${{ (github.event_name ==
-    'pull_request' || github.event_name == 'pull_request_target') && 'pr' || 'comment' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_target' }}
-
+    github.sha }}-${{ github.workflow }}-${{ github.event_name }}
+  cancel-in-progress: true
+  
 jobs:
   seinesailor:
     if: |
+      github.event_name == 'pull_request' ||
+      github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.fork ||
       (contains(github.event.comment.body, '@SeineSailor') && (
         github.event_name == 'issue_comment' || 
         github.event_name == 'pull_request_review_comment' ||
@@ -84,30 +85,39 @@ jobs:
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
-          echo "checking for mention outside of quotes"
-          if echo "$COMMENT_BODY" | grep -v '^>' | grep -q '@SeineSailor'; then
-            echo "mention_outside_quotes=true" >> $GITHUB_ENV
-          else
-            echo "mention_outside_quotes=false" >> $GITHUB_ENV
-          fi
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.head_ref }}
-      - name: Print event payload
+          echo "checking for mention outside of quotes and code blocks"
+          mention_outside_quotes=false
+          in_code_block=false
+          while IFS= read -r line; do
+            # Check for start or end of a code block
+            if [[ "$line" =~ ^\`\`\` ]]; then
+              if [[ "$in_code_block" = true ]]; then
+                in_code_block=false
+              else
+                in_code_block=true
+              fi
+            fi
+        
+            # Process lines that are not in a code block or quoted
+            if [[ "$in_code_block" = false && ! "$line" =~ ^\> ]]; then
+              if echo "$line" | grep -q '@SeineSailor'; then
+                mention_outside_quotes=true
+                break
+              fi
+            fi
+          done <<< "$COMMENT_BODY"
+          echo "mention_outside_quotes=$mention_outside_quotes" >> $GITHUB_ENV
+      - name: Dump event payload for debug
         run: cat $GITHUB_EVENT_PATH
-      - name: Print event repo_name
-        run: echo $GITHUB_REPOSITORY
       - name: Run SeineSailor
-        uses: ./
+        uses: SeineAI/SeineSailor@latest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
           WATSONX_PROJECT_ID: ${{ secrets.WATSONX_PROJECT_ID }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           debug: false
-          tag: 'stable' # or 'latest' for development version
+          tag: stable # or 'latest' for development version
 ```
 
 ### Environment Variables
@@ -120,8 +130,12 @@ jobs:
   set in the last part of yaml:
 
 ```yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           debug: false
+          tag: stable
           llm_api_type: openai
           llm_light_model: gpt-3.5-turbo
           llm_heavy_model: gpt-4
