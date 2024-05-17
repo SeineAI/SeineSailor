@@ -5,6 +5,10 @@ branding:
   color: 'blue'
 author: 'SeineAI'
 inputs:
+  tag:
+    description: 'Tag of the Docker image to use'
+    required: false
+    default: 'stable' # or 'latest' for development
   llm_api_type:
     required: false
     description: 'The API to use (openai or watsonx)'
@@ -199,10 +203,6 @@ inputs:
       Provide a concise summary of the pull request changes, highlighting the
       key modifications and their impact on the codebase. Include any relevant
       observations or suggestions for improvement.
-  tag:
-    description: 'Tag of the Docker image to use'
-    required: true
-    default: 'stable' # or 'latest' for development
 outputs:
   myOutput:
     description: "Output from the action for testing purpose"
