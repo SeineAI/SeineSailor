@@ -46,12 +46,6 @@ jobs:
         run: |
           short_tag=$(echo ${{ steps.release-drafter.outputs.tag_name }} | cut -d. -f1)
           echo "SHORT_TAG=$short_tag" >> $GITHUB_OUTPUT
-      - name: Move latest tag
-        run: |
-          git tag -f latest
-          git push origin -f latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   create_action_images:
     needs: create_release
     runs-on: ubuntu-latest
@@ -79,8 +73,8 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:stable
-#            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.create_release.outputs.full-tag }}
-#            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.create_release.outputs.short-tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.create_release.outputs.full-tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.create_release.outputs.short-tag }}
           platforms: linux/amd64
           provenance: false
           sbom: false
