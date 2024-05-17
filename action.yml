@@ -5,10 +5,6 @@ branding:
   color: 'blue'
 author: 'SeineAI'
 inputs:
-  tag:
-    description: 'Tag of the Docker image to use'
-    required: false
-    default: 'stable' # or 'latest' for development
   llm_api_type:
     required: false
     description: 'The API to use (openai or watsonx)'
