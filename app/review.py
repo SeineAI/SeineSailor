@@ -1,7 +1,7 @@
 import re
 import base64
 import asyncio
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Dict
 from app.options import Options
 from app.prompts import Prompts
 from app.commenter import COMMENT_REPLY_TAG, RAW_SUMMARY_END_TAG, RAW_SUMMARY_START_TAG, SHORT_SUMMARY_END_TAG, \
@@ -114,11 +114,8 @@ async def code_review(light_bot: Bot, heavy_bot: Bot, options: Options, prompts:
 
         patches = []
         for patch in split_patch(file_diff_inner):
-            patch_lines = patch_start_end_line(patch)
-            if patch_lines is None:
-                continue
-            hunks = parse_patch(patch)
-            if hunks is None:
+            hunks, patch_lines = parse_patch(patch)
+            if not patch_lines:
                 continue
             hunks_str = f"""
 ---new_hunk---
@@ -530,8 +527,8 @@ def split_patch(patch: str) -> List[str]:
     return result
 
 
-def patch_start_end_line(patch: str) -> dict:
-    pattern = re.compile(r"(^@@ -(\d+),(\d+) +(\d+),(\d+) @@)", re.MULTILINE)
+def patch_start_end_line(patch: str) -> Optional[Dict[str, Dict[str, int]]]:
+    pattern = re.compile(r"(^@@ -(\d+),(\d+) \+(\d+),(\d+) @@)", re.MULTILINE)
     match = pattern.search(patch)
     if match:
         old_begin = int(match.group(2))
@@ -552,10 +549,10 @@ def patch_start_end_line(patch: str) -> dict:
         return {}
 
 
-def parse_patch(patch: str) -> dict:
+def parse_patch(patch: str) -> (dict, dict):
     hunk_info = patch_start_end_line(patch)
-    if hunk_info is None:
-        return {}
+    if not hunk_info:
+        return {}, {}
 
     old_hunk_lines = []
     new_hunk_lines = []
@@ -592,7 +589,7 @@ def parse_patch(patch: str) -> dict:
     return {
         "old_hunk": "\n".join(old_hunk_lines),
         "new_hunk": "\n".join(new_hunk_lines)
-    }
+    }, hunk_info
 
 
 class Review:
