@@ -38,6 +38,7 @@ async def main():
     from app.bot import Bot
     from app.review import code_review
     from app.review_comment import handle_review_comment
+    from app.issue_comment import handle_issue_comment
 
     prompts = Prompts(
         summarize=os.environ.get("INPUT_SUMMARIZE", ""),
@@ -63,6 +64,8 @@ async def main():
             await code_review(light_bot, heavy_bot, options, prompts)
         elif os.environ.get("GITHUB_EVENT_NAME") == "pull_request_review_comment":
             await handle_review_comment(heavy_bot, options, prompts)
+        elif os.environ.get("GITHUB_EVENT_NAME") == "issue_comment":
+            await handle_issue_comment(heavy_bot, options, prompts)
         else:
             print("Skipped: this action only works on push events or pull_request")
     except Exception as e:
