@@ -250,9 +250,9 @@ and {pr_data["head"]["sha"]} commits.
         for i in range(0, len(summaries), batch_size):
             summaries_batch = summaries[i:i + batch_size]
             for filename, summary, _ in summaries_batch:
-                inputs.raw_summary += f"""---
-{filename}: {summary}
-"""
+                inputs.raw_summary += f"""---\n{filename}: {summary}\n"""
+
+            # Purpose of this step is to deduplicate and group together all the changes by file:
             summarize_resp = await heavy_bot.chat(prompts.render_summarize_changesets(inputs))
             if not summarize_resp:
                 logger.warning("summarize_resp: nothing obtained from llm")
