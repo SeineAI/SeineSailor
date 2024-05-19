@@ -53,21 +53,19 @@ on:
   discussion_comment:
   pull_request_review_comment:
     types: [ created ]
-  pull_request:
   pull_request_target:
-    types: [ opened, synchronize, reopened ]
+    types: [ opened, synchronize, reopened, edited ]
 
 concurrency:
   group:
     ${{ github.repository }}-${{ github.event.number || github.head_ref ||
     github.sha }}-${{ github.workflow }}-${{ github.event_name }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
   
 jobs:
   seinesailor:
     if: |
-      github.event_name == 'pull_request' ||
-      github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.fork ||
+      github.event_name == 'pull_request_target' ||
       (contains(github.event.comment.body, '@SeineSailor') && (
         github.event_name == 'issue_comment' || 
         github.event_name == 'pull_request_review_comment' ||
