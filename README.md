@@ -6,31 +6,22 @@
 ## Overview
 
 SeineSailor is an AI-powered copilot for project managers, designed to assist with code reviews, project discussions,
-and knowledge transfer. It leverages the power of WatsonX's `llama3` and `mixtral-8x7b` models to provide intelligent
+and knowledge transfer. It leverages the power of `llama3` and `mixtral-8x7b` models, hosted by Cloud providers such as IBM WatsonX, to provide intelligent
 and context-aware support throughout the development lifecycle.
 
-## Features
+SeineSailor is inspired by many research works [[1](https://www.computer.org/csdl/proceedings-article/issre/2023/159400a647/1RKjp8pPMHu), [2](https://arxiv.org/abs/2312.15698)] and open source projects[[3](https://github.com/anc95/ChatGPT-CodeReview), [4](https://github.com/coderabbitai/ai-pr-reviewer)]
 
-- **PR Review and Summarization**: SeineSailor provides automated reviews and summaries for pull requests. It analyzes
-  the changes and offers insights to streamline the review process.
-- **Line-by-line code change suggestions**: Reviews the changes line by line and
-  provides code change suggestions.
-- **Continuous, incremental reviews**: Reviews are performed on each commit
-  within a pull request, rather than a one-time review on the entire pull
-  request.
-- **Project Discussion Participation**: Engage SeineSailor in discussions across various forums including pull request
-  review comments, issues and discussions by mentioning `@SeineSailor`. It can contribute to brainstorming, provide
-  clarifications, summarize discussions, suggest code changes, etc.
-- **Knowledge Transfer and Query Resolution**: Leverages a comprehensive knowledge base to assist developers with
-  queries about the codebase, architectural design, and specific functionalities, aiding in faster onboarding and
-  information sharing.
-- **Smart review skipping**: By default, skips in-depth review for simple
-  changes (e.g. typo fixes) and when changes look good for the most part. It can
-  be disabled by setting `review_simple_changes` and `review_comment_lgtm` to
-  `true`.
-- **Customizable prompts**: Tailor the `system_message`, `summarize`, and
-  `summarize_release_notes` prompts to focus on specific aspects of the review
-  process or even change the review objective.
+## Features
+Here's the content formatted as a Markdown table:
+
+| Feature                          | Description                                                                                                                                                     |
+|----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **PR Review and Summarization**  | SeineSailor provides AI-powered automated reviews and summaries for pull requests on demand. It analyzes the changes and offers insights to streamline the review process. |
+| **Code change suggestions**      | Reviews the changes and provides code change suggestions.                                                                                                        |
+| **Project Discussion Participation** | Engage SeineSailor in discussions across various forums including pull request review comments, issues, and discussions by mentioning `@SeineSailor`. It can contribute to brainstorming, provide clarifications, summarize discussions, suggest code changes, etc. |
+| **Knowledge Transfer and Query Resolution** | Leverages a comprehensive knowledge base to assist developers with queries about the codebase, architectural design, and specific functionalities, aiding in faster onboarding and information sharing. |
+| **Smart review skipping**        | By default, skips in-depth review for simple changes (e.g., typo fixes) and when changes look good for the most part. It can be disabled by setting `review_simple_changes` and `review_comment_lgtm` to `true`. |
+| **Customizable prompts**         | Tailor the `system_message`, `summarize`, and `summarize_release_notes` prompts to focus on specific aspects of the review process or even change the review objective. |
 
 ## Installation
 
