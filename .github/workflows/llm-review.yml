@@ -36,6 +36,11 @@ jobs:
       (github.event_name == 'issues' && contains(github.event.issue.body, '@SeineSailor')) ||
       (github.event_name == 'discussion' && contains(github.event.discussion.body, '@SeineSailor'))
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
+      WATSONX_PROJECT_ID: ${{ secrets.WATSONX_PROJECT_ID }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
       - name: Check for mention outside of quotes in comments
         id: check_mention
@@ -74,10 +79,5 @@ jobs:
         run: cat $GITHUB_EVENT_PATH
       - name: Run SeineSailor
         uses: SeineAI/SeineSailor@dev-action-only-do-not-merge-or-delete
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
-          WATSONX_PROJECT_ID: ${{ secrets.WATSONX_PROJECT_ID }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           debug: true
