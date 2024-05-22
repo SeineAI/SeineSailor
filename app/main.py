@@ -39,6 +39,7 @@ async def main():
     from app.review import code_review
     from app.review_comment import handle_review_comment
     from app.issue_comment import handle_issue_comment
+    from app.context import context
 
     prompts = Prompts(
         summarize=os.environ.get("INPUT_SUMMARIZE", ""),
@@ -57,14 +58,12 @@ async def main():
         print(f"Skipped: failed to create review bot, please check your openai_api_key: {e}")
         return
 
-    logger.debug(f"GITHUB_EVENT_NAME:{os.environ.get('GITHUB_EVENT_NAME')}")
-
     try:
-        if os.environ.get("GITHUB_EVENT_NAME") in ["pull_request", "pull_request_target"]:
+        if context["event_name"] in ["pull_request", "pull_request_target"]:
             await code_review(light_bot, heavy_bot, options, prompts)
-        elif os.environ.get("GITHUB_EVENT_NAME") == "pull_request_review_comment":
+        elif context["event_name"] == "pull_request_review_comment":
             await handle_review_comment(heavy_bot, options, prompts)
-        elif os.environ.get("GITHUB_EVENT_NAME") == "issue_comment":
+        elif context["event_name"] == "issue_comment":
             await handle_issue_comment(heavy_bot, options, prompts)
         else:
             print("Skipped: this action only works on push events or pull_request")
