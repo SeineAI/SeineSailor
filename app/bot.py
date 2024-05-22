@@ -2,7 +2,7 @@ import os
 import time
 from datetime import datetime
 from tenacity import retry, stop_after_attempt, wait_fixed
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate
 from langchain_core.output_parsers import StrOutputParser
