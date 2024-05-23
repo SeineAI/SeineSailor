@@ -27,8 +27,8 @@ else:
     logger.debug(f"GITHUB_REPOSITORY:{repository}")
 repo: Repository = github_client.get_repo(repository)
 
-redirect_event_id = os.getenv("REDIRECT_EVENT_ID")
-if not redirect_event_id:
+redirect_event_name = os.getenv("REDIRECT_EVENT_NAME")
+if not redirect_event_name:
     # Load GitHub Actions context
     event_name = os.getenv("GITHUB_EVENT_NAME")
     if not event_name:
@@ -45,18 +45,9 @@ if not redirect_event_id:
     with open(event_path, 'r') as file:
         payload = json.load(file)
 else:
-    events = repo.get_events()
-    event_name = None
-    for event in events:
-        if event.id == redirect_event_id:
-            event_name = convert_event_type(event.type)
-            logger.debug(f"redirected from {os.getenv('GITHUB_EVENT_NAME')} to {event_name}")
-            payload = event.payload
-            break
-    if not event_name:
-        raise ValueError(f"Cannot find {redirect_event_id} event after redirect.")
-    else:
-        logger.debug(f"redirected from {os.getenv('GITHUB_EVENT_NAME')} to {event_name}")
+    payload = json.loads(os.getenv("REDIRECT_EVENT_PAYLOAD"))
+    event_name = redirect_event_name
+    logger.debug(f"redirected from {os.getenv('GITHUB_EVENT_NAME')} to {event_name}")
 
 # This is one way to construct the context using the information that we needed in the later code.
 # Another way to mimic the `import {context as github_context} from '@actions/github'` behavior, would be to
