@@ -119,11 +119,9 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           debug: false
-          tag: stable
           llm_api_type: openai
           llm_light_model: gpt-3.5-turbo
           llm_heavy_model: gpt-4
-          api_base_url: https://api.openai.com/v1
 ```
 
 ## Usage
